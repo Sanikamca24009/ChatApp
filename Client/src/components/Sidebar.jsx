@@ -15,6 +15,7 @@ const Sidebar = () => {
     createGroup,
     selectedUser,
     setSelectedUser,
+    setShowRightSidebar,
     unseenMessages = {},
     setUnseenMessages,
   } = useContext(ChatContext);
@@ -71,6 +72,9 @@ const Sidebar = () => {
 
   const handleSelectUser = (user) => {
     setSelectedUser(user);
+    if (typeof setShowRightSidebar === "function") {
+      setShowRightSidebar(false);
+    }
     if (typeof setUnseenMessages === "function") {
       setUnseenMessages((prev) => ({ ...prev, [user._id]: 0 }));
     }

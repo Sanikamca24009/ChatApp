@@ -33,27 +33,25 @@ const HomePage = () => {
         </div>
 
         {/* RIGHT SIDEBAR (PROFILE & MEDIA) */}
-        {selectedUser && (
+        {selectedUser && showRightSidebar && (
           <>
-            {/* Desktop (xl and above) static 3rd column */}
-            <div className="hidden xl:flex xl:w-[280px] 2xl:w-[300px] h-full border-l border-white/10 overflow-hidden flex-shrink-0 flex-col">
+            {/* Desktop (xl and above) toggleable 3rd column */}
+            <div className="hidden xl:flex xl:w-[300px] 2xl:w-[320px] h-full border-l border-white/10 overflow-hidden flex-shrink-0 flex-col animate-in slide-in-from-right duration-200">
               <RightSidebar onClose={() => setShowRightSidebar(false)} />
             </div>
 
             {/* Mobile / Tablet / Split-screen Drawer (< xl) */}
-            {showRightSidebar && (
-              <div className="xl:hidden fixed inset-0 z-50 flex justify-end">
-                {/* Backdrop */}
-                <div
-                  onClick={() => setShowRightSidebar(false)}
-                  className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
-                />
-                {/* Drawer Content */}
-                <div className="relative z-10 h-full w-full sm:w-[320px] bg-[#161622] border-l border-white/10 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
-                  <RightSidebar onClose={() => setShowRightSidebar(false)} />
-                </div>
+            <div className="xl:hidden fixed inset-0 z-50 flex justify-end">
+              {/* Backdrop */}
+              <div
+                onClick={() => setShowRightSidebar(false)}
+                className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+              />
+              {/* Drawer Content */}
+              <div className="relative z-10 h-full w-full sm:w-[320px] bg-[#161622] border-l border-white/10 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
+                <RightSidebar onClose={() => setShowRightSidebar(false)} />
               </div>
-            )}
+            </div>
           </>
         )}
 

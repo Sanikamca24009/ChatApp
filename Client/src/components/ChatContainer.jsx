@@ -738,10 +738,9 @@ const ChatContainer = () => {
             </svg>
           </button>
 
-          {/* User info (clickable to toggle profile) */}
+          {/* User info */}
           <div
-            onClick={() => setShowRightSidebar((prev) => !prev)}
-            className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer group"
+            className="flex items-center gap-2.5 min-w-0 flex-1"
           >
             <div className="relative flex-shrink-0">
               {selectedUser.isGroup ? (

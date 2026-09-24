@@ -545,17 +545,28 @@ app.use("/api/auth", userRouter);
 app.use("/api/messages", messageRouter);
 app.use("/api/groups", groupRouter);
 
-/* ---------------- DB ---------------- */
-await connectDB();
+/* ---------------- DB MIDDLEWARE ---------------- */
+// Connect to DB on first request (serverless-safe, cached connection)
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    console.error("DB connection error:", err.message);
+    res.status(500).json({ success: false, message: "Database connection failed" });
+  }
+});
 
 /* ---------------- START SERVER ---------------- */
 // In local dev, start the server normally.
-// In Vercel serverless, we export the server and Vercel handles it.
-if (process.env.NODE_ENV !== "production" || process.env.VERCEL !== "1") {
+// In Vercel serverless, we export the app and Vercel handles it.
+if (process.env.VERCEL !== "1") {
   const PORT = process.env.PORT || 5000;
   server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });
 }
 
-export default server;
+// Export the Express app (NOT http.Server) — Vercel needs a callable handler
+export default app;
+

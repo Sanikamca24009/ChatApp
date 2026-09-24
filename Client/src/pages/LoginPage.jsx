@@ -1,6 +1,7 @@
 import React, { useContext, useState } from 'react'
 import assets from '../assets/assets'
 import { AuthContext } from '../../context/AuthContext'
+import { useNavigate } from 'react-router-dom'
 
 const LoginPage = () => {
 
@@ -11,7 +12,8 @@ const LoginPage = () => {
   const [bio, setBio] = useState("")
   const [isDataSubmitted, setIsDataSubmitted] = useState(false);
 
-  const{login} = useContext(AuthContext)
+  const { login } = useContext(AuthContext)
+  const navigate = useNavigate()
 
   const onSubmitHandler = (event) => {
     event.preventDefault();
@@ -79,14 +81,21 @@ const LoginPage = () => {
 
           <div className='flex flex-col gap-2'>
             {currState === "Sign Up" ? (
-              <p className='text-sm text-gray-600'>Already have an account? <span  
+              <p className='text-sm text-gray-400'>Already have an account? <span  
               onClick={()=>{setCurrState("Login"); setIsDataSubmitted(false)}}
-              className='font-medium text-violet-500 cursor-pointer'>Login Here</span></p>
+              className='font-medium text-violet-400 cursor-pointer hover:underline'>Login Here</span></p>
             ) : (
-              <p className='text-sm text-gray-600'> Create an account <span onClick={()=>
-                setCurrState("Sign Up")}className='font-medium text-violet-500 
-                cursor-pointer'> Click Here</span></p>
-
+              <div className='flex items-center justify-between text-sm text-gray-400'>
+                <p>Create an account <span onClick={()=>
+                  setCurrState("Sign Up")} className='font-medium text-violet-400 
+                  cursor-pointer hover:underline'>Click Here</span></p>
+                <span
+                  onClick={() => navigate('/forgot-password')}
+                  className='font-medium text-violet-400 cursor-pointer hover:underline'
+                >
+                  Forgot Password?
+                </span>
+              </div>
             )}
           </div>
 

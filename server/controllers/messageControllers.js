@@ -44,8 +44,14 @@ export const getMessages = async (req, res) =>{
             ]
         })
         await Message.updateMany(
-            {senderId: selectedUserId, receiverId: myId},
-            {seen: true});
+            {senderId: selectedUserId, receiverId: myId, status: {$ne: "read"}},
+            {seen: true, status: "read"});
+
+        const senderSocketId = userSocketMap[selectedUserId];
+        if(senderSocketId){
+            io.to(senderSocketId).emit("messagesRead", { readerId: myId });
+        }
+
         res.json({success: true, messages})
     }catch (error) {
          console.log(error.message);
@@ -59,7 +65,13 @@ export const getMessages = async (req, res) =>{
 export const markMessagesAsSeen = async (req, res) =>{
     try {
         const {id} = req.params;
-        await Message.findByIdAndUpdate(id, {seen: true});
+        const updatedMessage = await Message.findByIdAndUpdate(id, {seen: true, status: "read"}, {new: true});
+        if(updatedMessage){
+            const senderSocketId = userSocketMap[updatedMessage.senderId];
+            if(senderSocketId){
+                io.to(senderSocketId).emit("messagesRead", { readerId: updatedMessage.receiverId });
+            }
+        }
         res.json({success: true})
     }catch (error) {
          console.log(error.message);
@@ -70,24 +82,57 @@ export const markMessagesAsSeen = async (req, res) =>{
 //send message to selected user
 export const sendMessage = async (req, res)=>{
     try{
-        const{text, image} = req.body;
+        const { text } = req.body;
         const receiverId = req.params.id;
-        const senderId = req.user.id;
+        const senderId = req.user.id || req.user._id;
 
         let imageUrl;
-        if(image){
-            const uploadResponse = await cloudinary.uploader.upload(image)
-            imageUrl = uploadResponse.secure_url;
+
+        // 1. If file uploaded via Multer
+        if (req.file) {
+            const hasCloudinary = Boolean(
+                process.env.CLOUDINARY_CLOUD_NAME &&
+                process.env.CLOUDINARY_API_KEY &&
+                process.env.CLOUDINARY_API_SECRET
+            );
+
+            if (hasCloudinary) {
+                try {
+                    const uploadResponse = await cloudinary.uploader.upload(req.file.path, {
+                        folder: "chat-messages",
+                    });
+                    imageUrl = uploadResponse.secure_url;
+                } catch (cloudErr) {
+                    console.error("Cloudinary upload failed, using local storage:", cloudErr.message);
+                    imageUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+                }
+            } else {
+                imageUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+            }
+        } else if (req.body.image) {
+            // 2. Base64 fallback if sent in JSON body
+            try {
+                const uploadResponse = await cloudinary.uploader.upload(req.body.image);
+                imageUrl = uploadResponse.secure_url;
+            } catch (err) {
+                console.error("Base64 upload error:", err.message);
+            }
         }
+
+        const receiverSocketId = userSocketMap[receiverId];
+        const status = receiverSocketId ? "delivered" : "sent";
+        const messageType = imageUrl ? "image" : "text";
+
         const newMessage = await Message.create({
             senderId,
             receiverId,
-            text,
-            image: imageUrl
-        })
+            text: text || "",
+            image: imageUrl || "",
+            messageType,
+            status
+        });
 
         //emit message to receiver if online
-        const receiverSocketId = userSocketMap[receiverId];
         if(receiverSocketId){
             io.to(receiverSocketId).emit("newMessage", newMessage);
         }

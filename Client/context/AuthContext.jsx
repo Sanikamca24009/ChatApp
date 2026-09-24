@@ -19,16 +19,20 @@ export const AuthProvider = ({ children })=>{
    // check if user is authinticated and if so, set the user data and connect the socket
 
         const checkAuth = async () => {
-            try{
+            try {
                 const { data } = await axios.get("/api/auth/check");
                 if (data.success) {
-                    setAuthUser(data.user)
-                    connectSocket(data.user)
+                    setAuthUser(data.user);
+                    connectSocket(data.user);
                 }
-            }catch(error){
-                toast.error(error.message)
+            } catch (error) {
+                // If token is invalid or expired, clean up stale credentials silently
+                localStorage.removeItem("token");
+                setToken(null);
+                setAuthUser(null);
+                delete axios.defaults.headers.common["token"];
             }
-    }
+        }
 
     // Login function to handle user authentication and socket connection
     const login = async (state, credentials) => {
@@ -46,7 +50,7 @@ export const AuthProvider = ({ children })=>{
                 toast.error(data.message);
             }
         } catch (error) {
-            toast.error(error.message);
+            toast.error(error.response?.data?.message || error.message);
         }
     }
 

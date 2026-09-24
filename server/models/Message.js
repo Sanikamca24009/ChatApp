@@ -6,7 +6,9 @@ const messageSchema = new mongoose.Schema({
    receiverId: {type: mongoose.Schema.Types.ObjectId, ref: "User", required: true},
    text: {type: String, },
    image: {type: String, },
-   seen: {type: Boolean, default: false}
+   seen: {type: Boolean, default: false},
+   status: {type: String, enum: ["sent", "delivered", "read"], default: "sent"},
+   messageType: {type: String, enum: ["text", "image"], default: "text"}
 },  {timestamps: true});
 
 const Message = mongoose.model("Message", messageSchema);

@@ -23,16 +23,22 @@ const allowedOrigins = [
   "http://localhost:5173",
 ];
 
-export const io = new Server(server, {
-  cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST"],
-    credentials: true,
-  },
-  // Use polling as transport to support Vercel serverless
-  transports: ["polling", "websocket"],
-  allowEIO3: true,
-});
+// Wrap in try-catch so Socket.IO failures don't crash the whole app on Vercel
+let _io = null;
+try {
+  _io = new Server(server, {
+    cors: {
+      origin: allowedOrigins,
+      methods: ["GET", "POST"],
+      credentials: true,
+    },
+    transports: ["polling", "websocket"],
+    allowEIO3: true,
+  });
+} catch (err) {
+  console.error("Socket.IO init failed (OK in serverless):", err.message);
+}
+export const io = _io;
 
 /* userId -> socketId */
 export const userSocketMap = {};
@@ -125,7 +131,8 @@ const logCallRecord = async ({
 };
 
 /* ---------------- SOCKET EVENTS ---------------- */
-io.on("connection", (socket) => {
+if (io) {
+  io.on("connection", (socket) => {
   const userId = socket.handshake.query.userId;
   console.log("User connected:", userId);
 
@@ -528,7 +535,7 @@ io.on("connection", (socket) => {
       }
     }
   });
-});
+} // end if(io)
 
 /* ---------------- MIDDLEWARES ---------------- */
 app.use(cors({

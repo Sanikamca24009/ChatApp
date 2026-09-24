@@ -36,7 +36,7 @@ const LoginPage = () => {
       {/*------------------------Right Side------------------------*/}
 
       <form onSubmit={onSubmitHandler} className='border-2 bg-white/8 text-white 
-      border-gray-500 p-6 flex flex-col gap-6 rounded-lg shadow-lg'>
+      border-gray-500 p-6 sm:p-8 flex flex-col gap-6 rounded-2xl shadow-2xl w-full max-w-md sm:min-w-[400px]'>
         <h2 className='font-medium text-2xl flex justify-between items-center'>
           {currState}
           {isDataSubmitted && <img onClick={()=> setIsDataSubmitted(false)} src=
@@ -70,31 +70,47 @@ const LoginPage = () => {
           )}          
 
         <button type="submit" className='py-3 bg-gradient-to-r from-purple-400 
-        to-violet-600 text-white rounded-md cursor-pointer'>
+        to-violet-600 text-white rounded-md cursor-pointer font-medium hover:opacity-95 transition-opacity'>
           {currState === "Sign Up" ? "Create Account" : "Login Now"}  
           </button> 
 
-          <div className='flex items-center gap-2 text-sm text-gray-500'>
-            <input type="checkbox" />
+          <div className='flex items-center gap-2 text-sm text-gray-400 select-none'>
+            <input type="checkbox" className="accent-violet-600 cursor-pointer" />
             <p>Agree to the terms of use & privacy policy</p>
           </div>
 
-          <div className='flex flex-col gap-2'>
+          <div className='flex flex-col gap-2 pt-1'>
             {currState === "Sign Up" ? (
-              <p className='text-sm text-gray-400'>Already have an account? <span  
-              onClick={()=>{setCurrState("Login"); setIsDataSubmitted(false)}}
-              className='font-medium text-violet-400 cursor-pointer hover:underline'>Login Here</span></p>
+              <p className='text-sm text-gray-400 text-center'>
+                Already have an account?{" "}
+                <span  
+                  onClick={()=>{setCurrState("Login"); setIsDataSubmitted(false)}}
+                  className='font-semibold text-violet-400 cursor-pointer hover:underline'
+                >
+                  Login Here
+                </span>
+              </p>
             ) : (
-              <div className='flex items-center justify-between text-sm text-gray-400'>
-                <p>Create an account <span onClick={()=>
-                  setCurrState("Sign Up")} className='font-medium text-violet-400 
-                  cursor-pointer hover:underline'>Click Here</span></p>
-                <span
+              <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm text-gray-400'>
+                <p>
+                  Create an account{" "}
+                  <span
+                    onClick={() => {
+                      setCurrState("Sign Up");
+                      setIsDataSubmitted(false);
+                    }}
+                    className='font-semibold text-violet-400 cursor-pointer hover:underline'
+                  >
+                    Click Here
+                  </span>
+                </p>
+                <button
+                  type="button"
                   onClick={() => navigate('/forgot-password')}
-                  className='font-medium text-violet-400 cursor-pointer hover:underline'
+                  className='font-semibold text-violet-400 hover:text-violet-300 cursor-pointer hover:underline text-left sm:text-right transition-colors'
                 >
                   Forgot Password?
-                </span>
+                </button>
               </div>
             )}
           </div>

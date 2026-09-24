@@ -7,12 +7,14 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import {Toaster} from 'react-hot-toast'
 import { AuthContext } from '../context/AuthContext.jsx'
+import CallScreen from './components/CallScreen.jsx'
 
 const App = () => {
   const {authUser} = useContext(AuthContext)
   return (
     <div className="bg-[url('./assets/bgImage.svg')] bg-contain">
       <Toaster />
+      <CallScreen />
       <Routes>
         <Route path='/' element={authUser ? <HomePage /> : <Navigate to="/Login" />}/>
         <Route path='/Login' element={!authUser ? <LoginPage /> : <Navigate to="/" />}/>

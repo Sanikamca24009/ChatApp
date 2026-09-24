@@ -34,15 +34,27 @@ const HomePage = () => {
 
         {/* RIGHT SIDEBAR (PROFILE & MEDIA) */}
         {selectedUser && (
-          <div
-            className={`h-full border-l border-white/10 overflow-hidden flex-shrink-0 flex-col transition-all duration-300 ${
-              showRightSidebar
-                ? "absolute inset-0 z-40 bg-[#161622] sm:static sm:z-auto sm:w-[280px] lg:w-[300px] flex"
-                : "hidden xl:flex xl:w-[280px] 2xl:w-[300px]"
-            }`}
-          >
-            <RightSidebar onClose={() => setShowRightSidebar(false)} />
-          </div>
+          <>
+            {/* Desktop (xl and above) static 3rd column */}
+            <div className="hidden xl:flex xl:w-[280px] 2xl:w-[300px] h-full border-l border-white/10 overflow-hidden flex-shrink-0 flex-col">
+              <RightSidebar onClose={() => setShowRightSidebar(false)} />
+            </div>
+
+            {/* Mobile / Tablet / Split-screen Drawer (< xl) */}
+            {showRightSidebar && (
+              <div className="xl:hidden fixed inset-0 z-50 flex justify-end">
+                {/* Backdrop */}
+                <div
+                  onClick={() => setShowRightSidebar(false)}
+                  className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+                />
+                {/* Drawer Content */}
+                <div className="relative z-10 h-full w-full sm:w-[320px] bg-[#161622] border-l border-white/10 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
+                  <RightSidebar onClose={() => setShowRightSidebar(false)} />
+                </div>
+              </div>
+            )}
+          </>
         )}
 
       </div>

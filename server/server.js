@@ -29,6 +29,9 @@ export const io = new Server(server, {
     methods: ["GET", "POST"],
     credentials: true,
   },
+  // Use polling as transport to support Vercel serverless
+  transports: ["polling", "websocket"],
+  allowEIO3: true,
 });
 
 /* userId -> socketId */
@@ -546,7 +549,13 @@ app.use("/api/groups", groupRouter);
 await connectDB();
 
 /* ---------------- START SERVER ---------------- */
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// In local dev, start the server normally.
+// In Vercel serverless, we export the server and Vercel handles it.
+if (process.env.NODE_ENV !== "production" || process.env.VERCEL !== "1") {
+  const PORT = process.env.PORT || 5000;
+  server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+export default server;

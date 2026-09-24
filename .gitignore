@@ -1,71 +1,33 @@
-# ===============================
-# Node / JavaScript
-# ===============================
+# Dependencies
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
+Client/node_modules/
+server/node_modules/
 
-# ===============================
-# Environment files (SECRETS)
-# ===============================
+# Environment files
 .env
-.env.*
-!.env.example
+Client/.env
+server/.env
 
-# ===============================
-# Build outputs
-# ===============================
+# Build output
 dist/
+Client/dist/
 build/
-out/
 
-# ===============================
-# Vite / React
-# ===============================
+# Vite cache
 .vite/
-.cache/
+Client/.vite/
 
-# ===============================
 # Logs
-# ===============================
-logs/
 *.log
+npm-debug.log*
 
-# ===============================
-# OS / Editor files
-# ===============================
+# OS files
 .DS_Store
 Thumbs.db
-desktop.ini
 
-# ===============================
-# VS Code (optional)
-# ===============================
+# IDE
 .vscode/
-!.vscode/extensions.json
+.idea/
 
-# ===============================
-# ZIP / Archive files
-# ===============================
+# Zip files
 *.zip
-*.rar
-*.7z
-
-# ===============================
-# Temporary / Backup files
-# ===============================
-*.tmp
-*.bak
-*.swp
-
-# ===============================
-# Coverage
-# ===============================
-coverage/
-
-# ===============================
-# MongoDB (local)
-# ===============================
-data/

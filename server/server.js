@@ -607,7 +607,14 @@ app.use(async (req, res, next) => {
 });
 
 /* ---------------- ROUTES ---------------- */
-app.use("/api/status", (req, res) => res.send("Server is live"));
+app.get("/", (req, res) => {
+  res.json({
+    success: true,
+    message: "ChatApp Server API is running live on Vercel!",
+    timestamp: new Date().toISOString(),
+  });
+});
+app.get("/api/status", (req, res) => res.json({ success: true, message: "Server is live" }));
 app.use("/api/auth", userRouter);
 app.use("/api/messages", messageRouter);
 app.use("/api/groups", groupRouter);

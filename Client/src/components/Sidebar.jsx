@@ -18,9 +18,10 @@ const Sidebar = () => {
     setShowRightSidebar,
     unseenMessages = {},
     setUnseenMessages,
+    typingUsers = {},
   } = useContext(ChatContext);
 
-  const { logout, onlineUsers = [] } = useContext(AuthContext);
+  const { authUser, logout, onlineUsers = [] } = useContext(AuthContext);
 
   const [input, setInput] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -84,10 +85,10 @@ const Sidebar = () => {
     <div className="flex flex-col h-full w-full p-4 sm:p-5 text-white bg-[#8185B2]/5 overflow-hidden select-none">
       {/* Header */}
       <div className="flex-shrink-0 pb-3">
-        <div className="flex justify-between items-center">
-          <img src={assets.logo} alt="QuickChat" className="max-w-36 h-auto" />
+        <div className="flex justify-between items-center gap-2">
+          <img src={assets.logo} alt="QuickChat" className="max-w-24 sm:max-w-32 h-auto flex-shrink-0" />
           
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             {/* New Group Button */}
             <button
               onClick={() => setIsGroupModalOpen(true)}
@@ -100,6 +101,31 @@ const Sidebar = () => {
               </svg>
               <span className="hidden sm:inline font-medium">New Group</span>
             </button>
+
+            {/* Logged-in User (Avatar / Letter & Name) */}
+            {authUser && (
+              <button
+                type="button"
+                onClick={() => navigate("/profile")}
+                className="flex items-center gap-1.5 py-1 px-2 rounded-lg bg-white/5 hover:bg-violet-600/20 border border-white/10 hover:border-violet-500/30 transition-all cursor-pointer group shadow-sm text-left flex-shrink-0"
+                title={`${authUser.fullName || "User"} (Click to edit profile)`}
+              >
+                {authUser.profilePic ? (
+                  <img
+                    src={authUser.profilePic}
+                    alt=""
+                    className="w-5 h-5 rounded-full object-cover border border-violet-400/50 flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-violet-600 to-fuchsia-600 text-white font-bold flex items-center justify-center text-[10px] uppercase shadow-sm flex-shrink-0">
+                    {authUser.fullName ? authUser.fullName.trim().charAt(0).toUpperCase() : "U"}
+                  </div>
+                )}
+                <span className="text-xs font-medium text-gray-200 group-hover:text-white truncate max-w-[65px] sm:max-w-[95px]">
+                  {authUser.fullName || "User"}
+                </span>
+              </button>
+            )}
 
             <div className="relative" ref={menuRef}>
               <button
@@ -193,9 +219,9 @@ const Sidebar = () => {
                 }`}
               >
                 {/* Avatar */}
-                <div className="relative flex-shrink-0">
+                <div className="relative w-11 h-11 flex-shrink-0">
                   {item.isGroup ? (
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-violet-600 to-fuchsia-600 flex items-center justify-center text-white border border-white/20 shadow-sm">
+                    <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-violet-600 to-fuchsia-600 flex items-center justify-center text-white border border-white/20 shadow-sm flex-shrink-0">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path
                           strokeLinecap="round"
@@ -205,68 +231,89 @@ const Sidebar = () => {
                         />
                       </svg>
                     </div>
+                  ) : item.profilePic ? (
+                    <img
+                      src={item.profilePic}
+                      alt={item.fullName}
+                      className="w-11 h-11 rounded-full object-cover border border-white/10"
+                    />
                   ) : (
-                    <>
-                      <img
-                        src={item?.profilePic || assets.avatar_icon}
-                        alt={item.fullName}
-                        className="w-10 h-10 aspect-square rounded-full object-cover border border-white/10"
-                      />
-                      {isUserOnline && (
-                        <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[#161622] rounded-full" />
-                      )}
-                    </>
+                    <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-violet-600 to-indigo-600 text-white font-bold flex items-center justify-center text-sm border border-white/15 uppercase shadow-sm">
+                      {item.fullName ? item.fullName.trim().charAt(0).toUpperCase() : "U"}
+                    </div>
+                  )}
+
+                  {isUserOnline && (
+                    <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[#161622] rounded-full shadow-sm" />
                   )}
                 </div>
 
-                {/* Conversation info */}
-                <div className="flex flex-col min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-1">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <p className="font-medium text-sm truncate text-white">
+                {/* Conversation info (2 rows: Row 1 = Name + Time, Row 2 = Preview + Unread Badge) */}
+                <div className="flex flex-col min-w-0 flex-1 justify-center gap-0.5">
+                  {/* Row 1: Name & Timestamp */}
+                  <div className="flex items-center justify-between gap-1 w-full">
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                      <p className="font-semibold text-sm truncate text-white">
                         {item.fullName}
                       </p>
+                      {item.isGroup && (
+                        <span className="text-[10px] text-violet-300 bg-violet-500/20 px-1.5 py-0.2 rounded font-medium border border-violet-500/30 flex-shrink-0">
+                          Group
+                        </span>
+                      )}
                     </div>
                     {item.lastMessage?.createdAt && (
-                      <span className="text-[10px] text-gray-400 flex-shrink-0">
+                      <span className="text-[11px] text-gray-400 font-medium whitespace-nowrap flex-shrink-0 ml-1.5">
                         {formatSidebarTime(item.lastMessage.createdAt)}
                       </span>
                     )}
                   </div>
-                  <p className="text-xs truncate">
-                    {item.lastMessage ? (
-                      <span className="text-gray-400 truncate">
-                        {item.lastMessage.isDeleted
-                          ? "🚫 This message was deleted"
-                          : item.lastMessage.messageType === "audio" || item.lastMessage.audio
-                          ? "🎤 Voice message"
-                          : item.lastMessage.image
-                          ? "📷 Photo"
-                          : `${item.isGroup && item.lastMessage.senderId?.fullName ? `${item.lastMessage.senderId.fullName}: ` : ""}${item.lastMessage.text}`}
-                      </span>
-                    ) : item.isGroup ? (
-                      <span className="text-gray-400">
-                        {item.members?.length >= 4 ? `${item.members.length}+ members` : "Group"}
-                      </span>
-                    ) : isUserOnline ? (
-                      <span className="text-green-400 font-medium">Online</span>
-                    ) : (
-                      <span className="text-gray-400">
-                        {formatLastSeen(item.lastSeen)}
+
+                  {/* Row 2: Subtitle / Typing indicator & Unread badge */}
+                  <div className="flex items-center justify-between gap-1 w-full">
+                    <div className="text-xs truncate flex-1 min-w-0 text-gray-400">
+                      {typingUsers[String(item._id)] ? (
+                        <span className="text-violet-400 font-semibold italic animate-pulse flex items-center gap-1.5">
+                          <span className="inline-flex gap-0.5 items-center">
+                            <span className="w-1 h-1 bg-violet-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                            <span className="w-1 h-1 bg-violet-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                            <span className="w-1 h-1 bg-violet-400 rounded-full animate-bounce" />
+                          </span>
+                          typing...
+                        </span>
+                      ) : item.lastMessage ? (
+                        <span className="truncate">
+                          {item.lastMessage.isDeleted
+                            ? "🚫 This message was deleted"
+                            : item.lastMessage.messageType === "audio" || item.lastMessage.audio
+                            ? "🎤 Voice message"
+                            : item.lastMessage.image
+                            ? "📷 Photo"
+                            : `${item.isGroup && item.lastMessage.senderId?.fullName ? `${item.lastMessage.senderId.fullName}: ` : ""}${item.lastMessage.text}`}
+                        </span>
+                      ) : item.isGroup ? (
+                        <span className="text-gray-400">
+                          {item.members?.length ? `${item.members.length} members` : "Group"}
+                        </span>
+                      ) : isUserOnline ? (
+                        <span className="text-green-400 font-medium">Online</span>
+                      ) : (
+                        <span className="text-gray-400">
+                          {formatLastSeen(item.lastSeen)}
+                        </span>
+                      )}
+                    </div>
+
+                    {unreadCount > 0 && (
+                      <span
+                        title={`${unreadCount} new messages`}
+                        className="flex-shrink-0 bg-violet-600 text-white text-[10px] font-bold h-4 min-w-[18px] px-1 flex items-center justify-center rounded-full ml-1.5 shadow-sm"
+                      >
+                        {unreadCount}
                       </span>
                     )}
-                  </p>
+                  </div>
                 </div>
-
-                {/* Unread badge */}
-                {unreadCount > 0 && (
-                  <span
-                    title={`${unreadCount} new messages`}
-                    className="flex-shrink-0 bg-violet-600 text-white text-[11px] font-bold h-5 min-w-[20px] px-1.5 flex items-center justify-center rounded-full"
-                  >
-                    {unreadCount}
-                  </span>
-                )}
               </div>
             );
           })

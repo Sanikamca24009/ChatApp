@@ -10,7 +10,7 @@ export const ChatProvider = ({ children }) => {
   const [groups, setGroups] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [unseenMessages, setUnseenMessages] = useState({});
-  const [typingUser, setTypingUser] = useState(false);
+  const [typingUsers, setTypingUsers] = useState({}); // { [userIdOrGroupId]: boolean }
   const [showRightSidebar, setShowRightSidebar] = useState(false);
 
   const { socket, axios, authUser } = useContext(AuthContext);
@@ -77,6 +77,50 @@ export const ChatProvider = ({ children }) => {
     } catch (error) {
       toast.error(error.response?.data?.message || error.message);
       return false;
+    }
+  };
+
+  const addMembersToGroup = async (groupId, memberIds) => {
+    try {
+      const { data } = await axios.post(`/api/groups/${groupId}/members/add`, { memberIds });
+      if (data.success) {
+        setGroups((prev) =>
+          prev.map((g) => (String(g._id) === String(groupId) ? data.group : g))
+        );
+        if (selectedUser && String(selectedUser._id) === String(groupId)) {
+          setSelectedUser((prev) => ({ ...prev, ...data.group }));
+        }
+        toast.success(data.message || "Members added successfully!");
+        return data.group;
+      } else {
+        toast.error(data.message || "Failed to add members");
+        return null;
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || error.message);
+      return null;
+    }
+  };
+
+  const removeMemberFromGroup = async (groupId, memberId) => {
+    try {
+      const { data } = await axios.post(`/api/groups/${groupId}/members/remove`, { memberId });
+      if (data.success) {
+        setGroups((prev) =>
+          prev.map((g) => (String(g._id) === String(groupId) ? data.group : g))
+        );
+        if (selectedUser && String(selectedUser._id) === String(groupId)) {
+          setSelectedUser((prev) => ({ ...prev, ...data.group }));
+        }
+        toast.success(data.message || "Member removed successfully");
+        return data.group;
+      } else {
+        toast.error(data.message || "Failed to remove member");
+        return null;
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || error.message);
+      return null;
     }
   };
 
@@ -270,7 +314,7 @@ export const ChatProvider = ({ children }) => {
   useEffect(() => {
     if (!socket) return;
 
-    let typingTimeout = null;
+    const typingTimeouts = new Map();
     const handledMsgIds = new Set();
 
     socket.on("newMessage", (newMessage) => {
@@ -395,26 +439,53 @@ export const ChatProvider = ({ children }) => {
       }
     });
 
+    socket.on("groupUpdated", (updatedGroup) => {
+      if (!updatedGroup) return;
+      setGroups((prev) =>
+        prev.map((g) => (String(g._id) === String(updatedGroup._id) ? updatedGroup : g))
+      );
+      setSelectedUser((prev) => {
+        if (prev && String(prev._id) === String(updatedGroup._id)) {
+          return { ...prev, ...updatedGroup };
+        }
+        return prev;
+      });
+    });
+
     socket.on("groupDeleted", ({ groupId }) => {
       setGroups((prev) => prev.filter((g) => String(g._id) !== String(groupId)));
       setSelectedUser((prev) => (prev && String(prev._id) === String(groupId) ? null : prev));
     });
 
-    socket.on("typing", ({ senderId }) => {
-      if (selectedUser && senderId === selectedUser._id) {
-        setTypingUser(true);
-        if (typingTimeout) clearTimeout(typingTimeout);
-        typingTimeout = setTimeout(() => {
-          setTypingUser(false);
-        }, 2000);
+    socket.on("typing", ({ senderId, groupId }) => {
+      const key = groupId ? String(groupId) : String(senderId);
+      setTypingUsers((prev) => ({ ...prev, [key]: true }));
+
+      if (typingTimeouts.has(key)) {
+        clearTimeout(typingTimeouts.get(key));
       }
+      const timer = setTimeout(() => {
+        setTypingUsers((prev) => {
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+        typingTimeouts.delete(key);
+      }, 3500);
+      typingTimeouts.set(key, timer);
     });
 
-    socket.on("stopTyping", ({ senderId }) => {
-      if (selectedUser && senderId === selectedUser._id) {
-        setTypingUser(false);
-        if (typingTimeout) clearTimeout(typingTimeout);
+    socket.on("stopTyping", ({ senderId, groupId }) => {
+      const key = groupId ? String(groupId) : String(senderId);
+      if (typingTimeouts.has(key)) {
+        clearTimeout(typingTimeouts.get(key));
+        typingTimeouts.delete(key);
       }
+      setTypingUsers((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
     });
 
     socket.on("messagesRead", ({ readerId }) => {
@@ -488,10 +559,11 @@ export const ChatProvider = ({ children }) => {
     });
 
     return () => {
-      if (typingTimeout) clearTimeout(typingTimeout);
-      setTypingUser(false);
+      typingTimeouts.forEach((timer) => clearTimeout(timer));
+      typingTimeouts.clear();
       socket.off("newMessage");
       socket.off("newGroup");
+      socket.off("groupUpdated");
       socket.off("groupMemberLeft");
       socket.off("groupDeleted");
       socket.off("typing");
@@ -505,6 +577,10 @@ export const ChatProvider = ({ children }) => {
     };
   }, [socket, selectedUser, authUser]);
 
+  const isCurrentChatTyping = selectedUser
+    ? Boolean(typingUsers[String(selectedUser._id)])
+    : false;
+
   return (
     <ChatContext.Provider
       value={{
@@ -515,6 +591,8 @@ export const ChatProvider = ({ children }) => {
         getGroups,
         createGroup,
         exitGroup,
+        addMembersToGroup,
+        removeMemberFromGroup,
         selectedUser,
         setSelectedUser,
         getUsers,
@@ -527,7 +605,8 @@ export const ChatProvider = ({ children }) => {
         toggleReaction,
         unseenMessages,
         setUnseenMessages,
-        typingUser,
+        typingUser: isCurrentChatTyping,
+        typingUsers,
         showRightSidebar,
         setShowRightSidebar,
       }}

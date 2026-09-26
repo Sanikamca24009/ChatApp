@@ -19,9 +19,12 @@ const server = http.createServer(app);
 
 /* ---------------- SOCKET.IO SETUP ---------------- */
 const allowedOrigins = [
-  process.env.CLIENT_URL || "http://localhost:5173",
+  process.env.CLIENT_URL,
   "http://localhost:5173",
-];
+  "http://localhost:5174",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
+].filter(Boolean);
 
 // Wrap in try-catch so Socket.IO failures don't crash the whole app on Vercel
 let _io = null;
@@ -154,17 +157,53 @@ if (io) {
   io.emit("getOnlineUsers", Object.keys(userSocketMap));
 
   /* ----------- TYPING EVENTS ----------- */
-  socket.on("typing", ({ senderId, receiverId }) => {
-    const receiverSocketId = userSocketMap[receiverId];
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit("typing", { senderId });
+  socket.on("typing", async ({ senderId, receiverId, groupId }) => {
+    try {
+      if (groupId) {
+        const group = await Group.findById(groupId);
+        if (group?.members) {
+          group.members.forEach((mId) => {
+            const mIdStr = mId.toString();
+            if (mIdStr !== senderId?.toString()) {
+              io.to(mIdStr).emit("typing", { senderId, groupId });
+            }
+          });
+        }
+      } else if (receiverId) {
+        const rIdStr = receiverId.toString();
+        io.to(rIdStr).emit("typing", { senderId });
+        const receiverSocketId = userSocketMap[rIdStr];
+        if (receiverSocketId && receiverSocketId !== socket.id) {
+          io.to(receiverSocketId).emit("typing", { senderId });
+        }
+      }
+    } catch (err) {
+      console.error("Error in typing event:", err.message);
     }
   });
 
-  socket.on("stopTyping", ({ senderId, receiverId }) => {
-    const receiverSocketId = userSocketMap[receiverId];
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit("stopTyping", { senderId });
+  socket.on("stopTyping", async ({ senderId, receiverId, groupId }) => {
+    try {
+      if (groupId) {
+        const group = await Group.findById(groupId);
+        if (group?.members) {
+          group.members.forEach((mId) => {
+            const mIdStr = mId.toString();
+            if (mIdStr !== senderId?.toString()) {
+              io.to(mIdStr).emit("stopTyping", { senderId, groupId });
+            }
+          });
+        }
+      } else if (receiverId) {
+        const rIdStr = receiverId.toString();
+        io.to(rIdStr).emit("stopTyping", { senderId });
+        const receiverSocketId = userSocketMap[rIdStr];
+        if (receiverSocketId && receiverSocketId !== socket.id) {
+          io.to(receiverSocketId).emit("stopTyping", { senderId });
+        }
+      }
+    } catch (err) {
+      console.error("Error in stopTyping event:", err.message);
     }
   });
 
@@ -535,7 +574,8 @@ if (io) {
       }
     }
   });
-} // end if(io)
+});
+}
 
 /* ---------------- MIDDLEWARES ---------------- */
 app.use(cors({
@@ -545,12 +585,6 @@ app.use(cors({
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
-
-/* ---------------- ROUTES ---------------- */
-app.use("/api/status", (req, res) => res.send("Server is live"));
-app.use("/api/auth", userRouter);
-app.use("/api/messages", messageRouter);
-app.use("/api/groups", groupRouter);
 
 /* ---------------- DB MIDDLEWARE ---------------- */
 // Connect to DB on first request (serverless-safe, cached connection)
@@ -564,12 +598,23 @@ app.use(async (req, res, next) => {
   }
 });
 
+/* ---------------- ROUTES ---------------- */
+app.use("/api/status", (req, res) => res.send("Server is live"));
+app.use("/api/auth", userRouter);
+app.use("/api/messages", messageRouter);
+app.use("/api/groups", groupRouter);
+
 /* ---------------- START SERVER ---------------- */
 // In local dev, start the server normally.
 // In Vercel serverless, we export the app and Vercel handles it.
 if (process.env.VERCEL !== "1") {
   const PORT = process.env.PORT || 5000;
-  server.listen(PORT, () => {
+  server.listen(PORT, async () => {
+    try {
+      await connectDB();
+    } catch (err) {
+      console.error("MongoDB initial connection error:", err.message);
+    }
     console.log(`Server running on port ${PORT}`);
   });
 }

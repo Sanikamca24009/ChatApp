@@ -24,7 +24,6 @@ const ChatContainer = () => {
     typingUser,
     showRightSidebar,
     setShowRightSidebar,
-    exitGroup,
   } = useContext(ChatContext);
 
   const { authUser, onlineUsers, socket } = useContext(AuthContext);
@@ -113,8 +112,6 @@ const ChatContainer = () => {
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editInput, setEditInput] = useState("");
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
-  const [showExitModal, setShowExitModal] = useState(false);
-  const [isExiting, setIsExiting] = useState(false);
 
   // In-conversation message search states
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -654,30 +651,25 @@ const ChatContainer = () => {
 
     if (!socket || !selectedUser || !authUser) return;
 
+    const payload = selectedUser.isGroup
+      ? { senderId: String(authUser._id), groupId: String(selectedUser._id) }
+      : { senderId: String(authUser._id), receiverId: String(selectedUser._id) };
+
     if (value.trim()) {
       const now = Date.now();
-      if (now - lastEmitTimeRef.current > 1500) {
-        socket.emit("typing", {
-          senderId: authUser._id,
-          receiverId: selectedUser._id,
-        });
+      if (now - lastEmitTimeRef.current > 1000) {
+        socket.emit("typing", payload);
         lastEmitTimeRef.current = now;
       }
 
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
       typingTimerRef.current = setTimeout(() => {
-        socket.emit("stopTyping", {
-          senderId: authUser._id,
-          receiverId: selectedUser._id,
-        });
+        socket.emit("stopTyping", payload);
         lastEmitTimeRef.current = 0;
-      }, 2000);
+      }, 2500);
     } else {
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
-      socket.emit("stopTyping", {
-        senderId: authUser._id,
-        receiverId: selectedUser._id,
-      });
+      socket.emit("stopTyping", payload);
       lastEmitTimeRef.current = 0;
     }
   };
@@ -688,10 +680,10 @@ const ChatContainer = () => {
 
     if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     if (socket && selectedUser && authUser) {
-      socket.emit("stopTyping", {
-        senderId: authUser._id,
-        receiverId: selectedUser._id,
-      });
+      const payload = selectedUser.isGroup
+        ? { senderId: String(authUser._id), groupId: String(selectedUser._id) }
+        : { senderId: String(authUser._id), receiverId: String(selectedUser._id) };
+      socket.emit("stopTyping", payload);
       lastEmitTimeRef.current = 0;
     }
 
@@ -795,60 +787,56 @@ const ChatContainer = () => {
 
         <div className="flex items-center gap-1 flex-shrink-0">
           {/* VOICE CALL BUTTON */}
-          {((!selectedUser?.isGroup && isOnline) || selectedUser?.isGroup) && (
-            <button
-              type="button"
-              onClick={() =>
-                selectedUser?.isGroup
-                  ? startGroupCall(selectedUser, "voice")
-                  : startCall(selectedUser, "voice")
-              }
-              className="p-2 rounded-full text-green-400 hover:text-green-300 hover:bg-green-500/15 transition-all cursor-pointer"
-              title={
-                selectedUser?.isGroup
-                  ? `Group voice call in ${selectedUser.name || "group"}`
-                  : `Voice call ${selectedUser.fullName || selectedUser.name || "contact"}`
-              }
-              aria-label="Start voice call"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a11.042 11.042 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                />
-              </svg>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() =>
+              selectedUser?.isGroup
+                ? startGroupCall(selectedUser, "voice")
+                : startCall(selectedUser, "voice")
+            }
+            className="p-2 rounded-full text-green-400 hover:text-green-300 hover:bg-green-500/15 transition-all cursor-pointer"
+            title={
+              selectedUser?.isGroup
+                ? `Group voice call in ${selectedUser.name || "group"}`
+                : `Voice call ${selectedUser.fullName || selectedUser.name || "contact"}${!isOnline ? " (Offline)" : ""}`
+            }
+            aria-label="Start voice call"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a11.042 11.042 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+              />
+            </svg>
+          </button>
 
           {/* VIDEO CALL BUTTON */}
-          {((!selectedUser?.isGroup && isOnline) || selectedUser?.isGroup) && (
-            <button
-              type="button"
-              onClick={() =>
-                selectedUser?.isGroup
-                  ? startGroupCall(selectedUser, "video")
-                  : startCall(selectedUser, "video")
-              }
-              className="p-2 rounded-full text-violet-400 hover:text-violet-300 hover:bg-violet-500/15 transition-all cursor-pointer"
-              title={
-                selectedUser?.isGroup
-                  ? `Group video call in ${selectedUser.name || "group"}`
-                  : `Video call ${selectedUser.fullName || selectedUser.name || "contact"}`
-              }
-              aria-label="Start video call"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-                />
-              </svg>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() =>
+              selectedUser?.isGroup
+                ? startGroupCall(selectedUser, "video")
+                : startCall(selectedUser, "video")
+            }
+            className="p-2 rounded-full text-violet-400 hover:text-violet-300 hover:bg-violet-500/15 transition-all cursor-pointer"
+            title={
+              selectedUser?.isGroup
+                ? `Group video call in ${selectedUser.name || "group"}`
+                : `Video call ${selectedUser.fullName || selectedUser.name || "contact"}${!isOnline ? " (Offline)" : ""}`
+            }
+            aria-label="Start video call"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+              />
+            </svg>
+          </button>
 
           {/* SEARCH TOGGLE BUTTON */}
           <button
@@ -881,19 +869,6 @@ const ChatContainer = () => {
             </svg>
           </button>
 
-          {/* EXIT GROUP BUTTON (For groups) */}
-          {selectedUser.isGroup && (
-            <button
-              onClick={() => setShowExitModal(true)}
-              className="p-2 rounded-full text-red-400/80 hover:text-red-300 hover:bg-red-500/15 transition-colors cursor-pointer"
-              title={`Exit ${selectedUser.name || "group"}`}
-              aria-label="Exit group"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-            </button>
-          )}
 
           {/* Right Info / Profile Toggle Button */}
           <button
@@ -1092,7 +1067,7 @@ const ChatContainer = () => {
                             {formatMessageTime(msg.createdAt)}
                           </span>
                         )}
-                        {((!selectedUser?.isGroup && isOnline) || selectedUser?.isGroup) && !isAnswered && (
+                        {!isAnswered && (
                           <button
                             type="button"
                             onClick={() =>
@@ -1371,6 +1346,26 @@ const ChatContainer = () => {
           </React.Fragment>
         );
       })}
+        {/* IN-CHAT TYPING INDICATOR BUBBLE */}
+        {typingUser && (
+          <div className="flex items-end gap-2 my-2 animate-in fade-in duration-200">
+            <div className="w-7 h-7 rounded-full bg-violet-600/30 border border-violet-500/30 flex items-center justify-center flex-shrink-0">
+              <img
+                src={selectedUser?.profilePic || assets.avatar_icon}
+                alt=""
+                className="w-full h-full rounded-full object-cover"
+              />
+            </div>
+            <div className="px-3.5 py-2 rounded-2xl rounded-bl-sm bg-white/10 backdrop-blur-md border border-white/10 flex items-center gap-1.5 shadow-sm text-gray-200">
+              <span className="text-xs text-violet-300 font-medium mr-1">
+                {selectedUser?.fullName || selectedUser?.name || "User"} is typing
+              </span>
+              <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+              <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+              <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce" />
+            </div>
+          </div>
+        )}
         <div ref={scrollEnd} />
       </div>
 
@@ -1663,56 +1658,7 @@ const ChatContainer = () => {
         </div>
       )}
 
-      {/* EXIT GROUP CONFIRMATION MODAL */}
-      {showExitModal && (
-        <div
-          onClick={() => !isExiting && setShowExitModal(false)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-150"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-[#1e1b2e] border border-white/15 rounded-2xl p-5 shadow-2xl animate-in zoom-in-95 duration-150 text-white"
-          >
-            <div className="w-12 h-12 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center mx-auto mb-3">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                />
-              </svg>
-            </div>
-            <h3 className="text-center font-semibold text-base">Exit Group?</h3>
-            <p className="text-center text-xs text-gray-400 mt-1.5 leading-relaxed">
-              Are you sure you want to leave <span className="text-white font-medium">"{selectedUser.name}"</span>? You will no longer receive messages or calls from this group.
-            </p>
-            <div className="flex items-center gap-2.5 mt-5">
-              <button
-                type="button"
-                onClick={() => setShowExitModal(false)}
-                disabled={isExiting}
-                className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-gray-200 text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  setIsExiting(true);
-                  await exitGroup(selectedUser._id);
-                  setIsExiting(false);
-                  setShowExitModal(false);
-                }}
-                disabled={isExiting}
-                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold transition-colors cursor-pointer shadow-lg shadow-red-600/30 disabled:opacity-50 flex items-center justify-center gap-1.5"
-              >
-                {isExiting ? "Exiting..." : "Exit Group"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 };

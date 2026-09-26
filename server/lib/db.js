@@ -1,16 +1,13 @@
 import mongoose from "mongoose";
 
 // Cache connection for serverless (Vercel reuses warm function instances)
-let isConnected = false;
-
 export const connectDB = async () => {
-  if (isConnected) return; // Reuse existing connection in warm instances
+  if (mongoose.connection.readyState === 1) return; // Reuse existing connection
   try {
     await mongoose.connect(process.env.MONGODB_URI, {
       serverSelectionTimeoutMS: 15000,
       socketTimeoutMS: 45000,
     });
-    isConnected = true;
     console.log("MongoDB connected");
   } catch (error) {
     console.error("MongoDB connection failed:", error.message);

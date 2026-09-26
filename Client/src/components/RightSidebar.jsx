@@ -2,15 +2,31 @@ import React, { useContext, useEffect, useState } from "react";
 import assets from "../assets/assets";
 import { ChatContext } from "../../context/ChatContext";
 import { AuthContext } from "../../context/AuthContext";
+import { CallContext } from "../../context/CallContext";
 import { formatLastSeen } from "../lib/utils";
 
 const RightSidebar = ({ onClose }) => {
-  const { selectedUser, messages, users, setShowRightSidebar, exitGroup } = useContext(ChatContext);
+  const {
+    selectedUser,
+    messages,
+    users,
+    setShowRightSidebar,
+    exitGroup,
+    addMembersToGroup,
+    removeMemberFromGroup,
+  } = useContext(ChatContext);
   const { authUser, logout, onlineUsers } = useContext(AuthContext);
+  const { startCall, startGroupCall } = useContext(CallContext);
   const [images, setImages] = useState([]);
   const [previewImage, setPreviewImage] = useState(null);
   const [showExitModal, setShowExitModal] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [selectedNewMembers, setSelectedNewMembers] = useState([]);
+  const [memberSearchQuery, setMemberSearchQuery] = useState("");
+  const [isSubmittingMembers, setIsSubmittingMembers] = useState(false);
+  const [memberToRemove, setMemberToRemove] = useState(null);
+  const [isRemovingMember, setIsRemovingMember] = useState(false);
 
   useEffect(() => {
     setImages(messages.filter((m) => m.image).map((m) => m.image));
@@ -38,6 +54,36 @@ const RightSidebar = ({ onClose }) => {
     } else if (typeof setShowRightSidebar === "function") {
       setShowRightSidebar(false);
     }
+  };
+
+  const currentMemberIds = new Set(
+    (selectedUser?.members || []).map((m) => String(m._id || m))
+  );
+  const availableUsersToAdd = (users || []).filter(
+    (u) => !currentMemberIds.has(String(u._id))
+  );
+  const filteredAvailableUsers = memberSearchQuery
+    ? availableUsersToAdd.filter((u) =>
+        u.fullName?.toLowerCase().includes(memberSearchQuery.toLowerCase())
+      )
+    : availableUsersToAdd;
+
+  const handleAddMembersSubmit = async () => {
+    if (selectedNewMembers.length === 0) return;
+    setIsSubmittingMembers(true);
+    await addMembersToGroup(selectedUser._id, selectedNewMembers);
+    setIsSubmittingMembers(false);
+    setSelectedNewMembers([]);
+    setShowAddMemberModal(false);
+    setMemberSearchQuery("");
+  };
+
+  const handleConfirmRemoveMember = async () => {
+    if (!memberToRemove) return;
+    setIsRemovingMember(true);
+    await removeMemberFromGroup(selectedUser._id, memberToRemove._id || memberToRemove);
+    setIsRemovingMember(false);
+    setMemberToRemove(null);
   };
 
   return (
@@ -108,35 +154,128 @@ const RightSidebar = ({ onClose }) => {
             )}
           </div>
 
+          {/* QUICK CALL ACTIONS FOR ALL USERS & GROUPS */}
+          <div className="mt-3.5 flex items-center justify-center gap-2.5 w-full max-w-[240px]">
+            <button
+              type="button"
+              onClick={() =>
+                selectedUser.isGroup
+                  ? startGroupCall(selectedUser, "voice")
+                  : startCall(selectedUser, "voice")
+              }
+              className="flex-1 py-2 px-3 rounded-xl bg-green-500/10 hover:bg-green-500/20 border border-green-500/25 text-green-400 hover:text-green-300 text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+              title={selectedUser.isGroup ? "Group Voice Call" : "Voice Call"}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a11.042 11.042 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                />
+              </svg>
+              <span>Audio</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                selectedUser.isGroup
+                  ? startGroupCall(selectedUser, "video")
+                  : startCall(selectedUser, "video")
+              }
+              className="flex-1 py-2 px-3 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/25 text-violet-400 hover:text-violet-300 text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+              title={selectedUser.isGroup ? "Group Video Call" : "Video Call"}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+                />
+              </svg>
+              <span>Video</span>
+            </button>
+          </div>
+
           {selectedUser.isGroup && (
             <div className="w-full mt-4 pt-3 border-t border-white/10 text-left">
-              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                Members ({selectedUser.members?.length || 0})
-              </p>
-              <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                {(selectedUser.members || []).map((m) => (
-                  <div key={m._id || m} className="flex items-center justify-between text-xs py-1">
-                    <span className="text-gray-200 truncate">{m.fullName || "Member"}</span>
-                    {String(m._id || m) === adminIdStr && (
-                      <span className="text-[10px] text-violet-400 bg-violet-500/20 px-1.5 py-0.5 rounded font-medium">
-                        Admin
-                      </span>
-                    )}
-                  </div>
-                ))}
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                  Members ({selectedUser.members?.length || 0})
+                </p>
+                {/* Add Member button (Admin only) */}
+                {isGroupCreator && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddMemberModal(true)}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-violet-300 hover:text-white bg-violet-600/20 hover:bg-violet-600/35 px-2 py-0.5 rounded-lg border border-violet-500/30 transition-all cursor-pointer shadow-sm active:scale-95"
+                    title="Add members to group"
+                  >
+                    <svg className="w-3.5 h-3.5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span>Add Member</span>
+                  </button>
+                )}
               </div>
 
-              {/* Exit Group Button under member list */}
-              <button
-                type="button"
-                onClick={() => setShowExitModal(true)}
-                className="mt-3 w-full py-2 px-3 rounded-xl border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-                Exit Group
-              </button>
+              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                {(selectedUser.members || []).map((m) => {
+                  const mId = String(m._id || m);
+                  const isThisAdmin = mId === adminIdStr;
+                  const isCurrentUser = authUser && String(authUser._id) === mId;
+                  const canRemove = (isGroupCreator || adminIdStr === String(authUser?._id)) && !isThisAdmin;
+
+                  return (
+                    <div
+                      key={mId}
+                      className="flex items-center justify-between text-xs py-1.5 px-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+                        {m.profilePic ? (
+                          <img
+                            src={m.profilePic}
+                            alt=""
+                            className="w-6 h-6 rounded-full object-cover border border-violet-400/40 flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-violet-600 to-fuchsia-600 text-white font-bold flex items-center justify-center text-[10px] uppercase flex-shrink-0 shadow-sm">
+                            {m.fullName ? m.fullName.trim().charAt(0).toUpperCase() : "M"}
+                          </div>
+                        )}
+                        <span className="text-gray-200 truncate font-medium">
+                          {m.fullName || "Member"}
+                          {isCurrentUser && <span className="text-gray-400 text-[10px] ml-1">(You)</span>}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {isThisAdmin && (
+                          <span className="text-[10px] text-violet-300 bg-violet-500/25 px-1.5 py-0.5 rounded font-medium border border-violet-500/30">
+                            Admin
+                          </span>
+                        )}
+
+                        {canRemove && (
+                          <button
+                            type="button"
+                            onClick={() => setMemberToRemove(m)}
+                            className="text-red-400/80 hover:text-red-300 hover:bg-red-500/20 p-1 rounded-md transition-colors cursor-pointer"
+                            title={`Remove ${m.fullName || "member"} from group`}
+                            aria-label="Remove member"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -276,6 +415,163 @@ const RightSidebar = ({ onClose }) => {
                 className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold transition-colors cursor-pointer shadow-lg shadow-red-600/30 disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
                 {isExiting ? "Exiting..." : "Exit Group"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD MEMBER MODAL */}
+      {showAddMemberModal && (
+        <div
+          onClick={() => !isSubmittingMembers && setShowAddMemberModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm bg-[#1e1b2e] border border-white/15 rounded-2xl p-5 shadow-2xl animate-in zoom-in-95 duration-150 text-white flex flex-col max-h-[85vh]"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <h3 className="font-semibold text-base">Add Members</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddMemberModal(false);
+                  setSelectedNewMembers([]);
+                  setMemberSearchQuery("");
+                }}
+                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Search */}
+            <div className="my-3">
+              <input
+                type="text"
+                value={memberSearchQuery}
+                onChange={(e) => setMemberSearchQuery(e.target.value)}
+                placeholder="Search contacts..."
+                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-white placeholder-gray-400 focus:outline-none focus:border-violet-500"
+              />
+            </div>
+
+            {/* Contacts list */}
+            <div className="flex-1 overflow-y-auto space-y-1 my-1 pr-1 max-h-56">
+              {filteredAvailableUsers.length === 0 ? (
+                <div className="text-center py-6 text-xs text-gray-400">
+                  {availableUsersToAdd.length === 0
+                    ? "All your contacts are already in this group."
+                    : "No matching contacts found."}
+                </div>
+              ) : (
+                filteredAvailableUsers.map((u) => {
+                  const isChecked = selectedNewMembers.includes(u._id);
+                  return (
+                    <div
+                      key={u._id}
+                      onClick={() => {
+                        setSelectedNewMembers((prev) =>
+                          isChecked ? prev.filter((id) => id !== u._id) : [...prev, u._id]
+                        );
+                      }}
+                      className={`flex items-center justify-between p-2 rounded-xl cursor-pointer transition-colors ${
+                        isChecked
+                          ? "bg-violet-600/30 border border-violet-500/40"
+                          : "hover:bg-white/5 border border-transparent"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {u.profilePic ? (
+                          <img
+                            src={u.profilePic}
+                            alt=""
+                            className="w-7 h-7 rounded-full object-cover border border-white/10 flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-violet-600 to-fuchsia-600 text-white font-bold flex items-center justify-center text-[10px] uppercase flex-shrink-0">
+                            {u.fullName ? u.fullName.trim().charAt(0).toUpperCase() : "U"}
+                          </div>
+                        )}
+                        <span className="text-xs font-medium text-white truncate">
+                          {u.fullName}
+                        </span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => {}}
+                        className="rounded accent-violet-600 cursor-pointer w-4 h-4"
+                      />
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Buttons */}
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10 mt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddMemberModal(false);
+                  setSelectedNewMembers([]);
+                  setMemberSearchQuery("");
+                }}
+                className="px-3 py-1.5 rounded-xl text-xs text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={selectedNewMembers.length === 0 || isSubmittingMembers}
+                onClick={handleAddMembersSubmit}
+                className="px-4 py-1.5 rounded-xl text-xs font-semibold bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                {isSubmittingMembers ? "Adding..." : `Add (${selectedNewMembers.length})`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM REMOVE MEMBER MODAL */}
+      {memberToRemove && (
+        <div
+          onClick={() => !isRemovingMember && setMemberToRemove(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm bg-[#1e1b2e] border border-white/15 rounded-2xl p-5 shadow-2xl animate-in zoom-in-95 duration-150 text-white flex flex-col"
+          >
+            <div className="w-12 h-12 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center mx-auto mb-3">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </div>
+            <h3 className="text-center font-semibold text-base">Remove Member?</h3>
+            <p className="text-center text-xs text-gray-400 mt-1.5 leading-relaxed">
+              Are you sure you want to remove <span className="text-white font-medium">"{memberToRemove.fullName || "this member"}"</span> from <span className="text-violet-300 font-medium">"{selectedUser.name}"</span>?
+            </p>
+
+            <div className="flex items-center gap-2.5 mt-5">
+              <button
+                type="button"
+                onClick={() => setMemberToRemove(null)}
+                disabled={isRemovingMember}
+                className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-gray-200 text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRemoveMember}
+                disabled={isRemovingMember}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold transition-colors cursor-pointer shadow-lg shadow-red-600/30 disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {isRemovingMember ? "Removing..." : "Remove"}
               </button>
             </div>
           </div>

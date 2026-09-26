@@ -319,3 +319,179 @@ export const exitGroup = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// Add members to an existing group
+export const addMembers = async (req, res) => {
+  try {
+    const { id: groupId } = req.params;
+    const { memberIds } = req.body;
+    const userId = req.user._id;
+
+    const group = await Group.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ success: false, message: "Group not found" });
+    }
+
+    const isAdmin = group.admin.toString() === userId.toString();
+    if (!isAdmin) {
+      return res.status(403).json({ success: false, message: "Only the group admin can add members" });
+    }
+
+    let parsedMembers = [];
+    if (typeof memberIds === "string") {
+      try {
+        parsedMembers = JSON.parse(memberIds);
+      } catch (e) {
+        parsedMembers = memberIds.split(",").map((m) => m.trim());
+      }
+    } else if (Array.isArray(memberIds)) {
+      parsedMembers = memberIds;
+    }
+
+    if (!parsedMembers || parsedMembers.length === 0) {
+      return res.status(400).json({ success: false, message: "No members specified to add" });
+    }
+
+    const currentMemberIds = new Set(group.members.map((m) => m.toString()));
+    const newMemberIds = parsedMembers.filter((mId) => !currentMemberIds.has(mId.toString()));
+
+    if (newMemberIds.length === 0) {
+      return res.status(400).json({ success: false, message: "Selected users are already members of this group" });
+    }
+
+    newMemberIds.forEach((mId) => group.members.push(mId));
+    await group.save();
+
+    const addedUsers = await User.find({ _id: { $in: newMemberIds } }).select("fullName");
+    const addedNames = addedUsers.map((u) => u.fullName).join(", ");
+
+    const systemNotice = await Message.create({
+      senderId: userId,
+      groupId,
+      text: `${req.user.fullName} added ${addedNames || "new members"} to the group`,
+      messageType: "text",
+      status: "delivered",
+    });
+
+    const populatedGroup = await Group.findById(groupId)
+      .populate("members", "fullName profilePic email lastSeen")
+      .populate("admin", "fullName profilePic");
+
+    const groupObj = populatedGroup.toObject();
+    groupObj.isGroup = true;
+    groupObj.lastMessage = systemNotice;
+    groupObj.lastMessageTime = new Date(systemNotice.createdAt).getTime();
+
+    group.members.forEach((memberId) => {
+      const mIdStr = memberId.toString();
+      const sId = userSocketMap[mIdStr];
+      if (sId) {
+        io.to(sId).emit("newGroup", groupObj);
+        io.to(sId).emit("groupUpdated", groupObj);
+        io.to(sId).emit("newMessage", systemNotice);
+      }
+      io.to(mIdStr).emit("newGroup", groupObj);
+      io.to(mIdStr).emit("groupUpdated", groupObj);
+      io.to(mIdStr).emit("newMessage", systemNotice);
+    });
+
+    res.json({ success: true, group: groupObj, message: "Members added successfully" });
+  } catch (error) {
+    console.error("Error in addMembers:", error.message);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Remove a member from a group
+export const removeMember = async (req, res) => {
+  try {
+    const { id: groupId } = req.params;
+    const { memberId } = req.body;
+    const requesterId = req.user._id;
+
+    if (!memberId) {
+      return res.status(400).json({ success: false, message: "Member ID is required" });
+    }
+
+    const group = await Group.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ success: false, message: "Group not found" });
+    }
+
+    const isAdmin = group.admin.toString() === requesterId.toString();
+    const isSelf = memberId.toString() === requesterId.toString();
+
+    if (!isAdmin && !isSelf) {
+      return res.status(403).json({ success: false, message: "Only the group admin can remove members" });
+    }
+
+    if (memberId.toString() === group.admin.toString() && group.members.length > 1) {
+      return res.status(400).json({ success: false, message: "Cannot remove the group admin" });
+    }
+
+    const removedUser = await User.findById(memberId).select("fullName");
+    const removedUserName = removedUser?.fullName || "A member";
+
+    group.members = group.members.filter((m) => m.toString() !== memberId.toString());
+
+    if (group.members.length === 0) {
+      await Group.findByIdAndDelete(groupId);
+      await Message.deleteMany({ groupId });
+      io.emit("groupDeleted", { groupId });
+      return res.json({ success: true, message: "Group was deleted as no members remain" });
+    }
+
+    await group.save();
+
+    const systemNotice = await Message.create({
+      senderId: requesterId,
+      groupId,
+      text: isSelf
+        ? `${req.user.fullName} left the group`
+        : `${removedUserName} was removed from the group by ${req.user.fullName}`,
+      messageType: "text",
+      status: "delivered",
+    });
+
+    const populatedGroup = await Group.findById(groupId)
+      .populate("members", "fullName profilePic email lastSeen")
+      .populate("admin", "fullName profilePic");
+
+    const groupObj = populatedGroup.toObject();
+    groupObj.isGroup = true;
+    groupObj.lastMessage = systemNotice;
+    groupObj.lastMessageTime = new Date(systemNotice.createdAt).getTime();
+
+    const removedSocketId = userSocketMap[memberId.toString()];
+    if (removedSocketId) {
+      io.to(removedSocketId).emit("groupMemberLeft", {
+        groupId,
+        userId: memberId.toString(),
+        userName: removedUserName,
+        group: null,
+      });
+    }
+    io.to(memberId.toString()).emit("groupMemberLeft", {
+      groupId,
+      userId: memberId.toString(),
+      userName: removedUserName,
+      group: null,
+    });
+
+    group.members.forEach((mId) => {
+      const mIdStr = mId.toString();
+      const sId = userSocketMap[mIdStr];
+      if (sId) {
+        io.to(sId).emit("groupUpdated", groupObj);
+        io.to(sId).emit("newMessage", systemNotice);
+      }
+      io.to(mIdStr).emit("groupUpdated", groupObj);
+      io.to(mIdStr).emit("newMessage", systemNotice);
+    });
+
+    res.json({ success: true, group: groupObj, message: `${removedUserName} removed from group` });
+  } catch (error) {
+    console.error("Error in removeMember:", error.message);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

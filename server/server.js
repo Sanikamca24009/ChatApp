@@ -26,6 +26,14 @@ const allowedOrigins = [
   "http://127.0.0.1:5174",
 ].filter(Boolean);
 
+const corsOriginCheck = (origin, callback) => {
+  if (!origin) return callback(null, true);
+  if (allowedOrigins.includes(origin) || origin.includes("vercel.app") || origin.includes("localhost")) {
+    return callback(null, true);
+  }
+  return callback(null, true);
+};
+
 // Wrap in try-catch so Socket.IO failures don't crash the whole app on Vercel
 let _io = null;
 try {
@@ -579,7 +587,7 @@ if (io) {
 
 /* ---------------- MIDDLEWARES ---------------- */
 app.use(cors({
-  origin: allowedOrigins,
+  origin: corsOriginCheck,
   credentials: true,
 }));
 app.use(express.json({ limit: "10mb" }));

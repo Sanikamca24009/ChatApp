@@ -39,7 +39,7 @@ let _io = null;
 try {
   _io = new Server(server, {
     cors: {
-      origin: allowedOrigins,
+      origin: corsOriginCheck,
       methods: ["GET", "POST"],
       credentials: true,
     },

@@ -1,7 +1,14 @@
 import dns from "node:dns";
 import mongoose from "mongoose";
 
-dns.setServers(["8.8.8.8", "1.1.1.1"]);
+// Only override DNS servers in local dev if needed, never in serverless (Vercel)
+if (process.env.VERCEL !== "1") {
+  try {
+    dns.setServers(["8.8.8.8", "1.1.1.1"]);
+  } catch (e) {
+    // ignore
+  }
+}
 
 // Cache connection for serverless (Vercel reuses warm function instances)
 export const connectDB = async () => {

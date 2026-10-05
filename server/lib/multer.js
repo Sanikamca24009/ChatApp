@@ -1,11 +1,19 @@
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import os from "os";
 
-// Ensure uploads folder exists
-const uploadDir = path.join(process.cwd(), "uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+// Ensure uploads folder exists (use /tmp on Vercel because filesystem is read-only)
+const uploadDir = process.env.VERCEL === "1"
+  ? path.join(os.tmpdir(), "uploads")
+  : path.join(process.cwd(), "uploads");
+
+try {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+} catch (err) {
+  console.warn("Could not create uploads folder:", err.message);
 }
 
 const storage = multer.diskStorage({

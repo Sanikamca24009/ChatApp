@@ -470,10 +470,25 @@ export const CallProvider = ({ children }) => {
       callTypeRef.current = incomingType;
       setIsCameraOff(false);
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: incomingType === "video",
-      });
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: incomingType === "video",
+        });
+      } catch (mediaErr) {
+        if (incomingType === "video") {
+          console.warn("Camera busy or unavailable, falling back to audio only:", mediaErr);
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: false,
+          });
+          setIsCameraOff(true);
+          toast.info("Camera is in use or unavailable. Connected with audio only.");
+        } else {
+          throw mediaErr;
+        }
+      }
       localStreamRef.current = stream;
       setLocalStream(stream);
 
@@ -498,7 +513,12 @@ export const CallProvider = ({ children }) => {
       }, 1000);
     } catch (err) {
       console.error("Error accepting call:", err);
-      toast.error("Failed to connect call media");
+      const isDenied = err.name === "NotAllowedError";
+      toast.error(
+        isDenied
+          ? "Microphone/camera access was denied. Please allow access."
+          : "Could not access microphone/camera (device in use or unavailable)."
+      );
       rejectCall();
     }
   };
@@ -550,10 +570,25 @@ export const CallProvider = ({ children }) => {
       setIsCameraOff(false);
       hasAnyMemberJoinedRef.current = false;
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: type === "video",
-      });
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: type === "video",
+        });
+      } catch (mediaErr) {
+        if (type === "video") {
+          console.warn("Camera busy or unavailable, falling back to audio only:", mediaErr);
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: false,
+          });
+          setIsCameraOff(true);
+          toast.info("Camera is in use or unavailable. Started call with audio only.");
+        } else {
+          throw mediaErr;
+        }
+      }
       localStreamRef.current = stream;
       setLocalStream(stream);
 
@@ -579,7 +614,7 @@ export const CallProvider = ({ children }) => {
       toast.error(
         err.name === "NotAllowedError"
           ? `${type === "video" ? "Camera/Microphone" : "Microphone"} access was denied.`
-          : `Could not access ${type === "video" ? "camera/microphone" : "microphone"}.`
+          : `Could not access ${type === "video" ? "camera/microphone" : "microphone"}. Check device permissions.`
       );
       cleanupMediaAndPeer();
       setCallStatus("idle");
@@ -600,10 +635,25 @@ export const CallProvider = ({ children }) => {
       setActiveGroup({ _id: groupId, name: groupName });
       setIsCameraOff(false);
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: incomingType === "video",
-      });
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: incomingType === "video",
+        });
+      } catch (mediaErr) {
+        if (incomingType === "video") {
+          console.warn("Camera busy or unavailable, falling back to audio only:", mediaErr);
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: false,
+          });
+          setIsCameraOff(true);
+          toast.info("Camera is in use or unavailable. Connected with audio only.");
+        } else {
+          throw mediaErr;
+        }
+      }
       localStreamRef.current = stream;
       setLocalStream(stream);
 
@@ -625,7 +675,12 @@ export const CallProvider = ({ children }) => {
       });
     } catch (err) {
       console.error("Error accepting group call:", err);
-      toast.error("Failed to connect group media");
+      const isDenied = err.name === "NotAllowedError";
+      toast.error(
+        isDenied
+          ? "Microphone or camera permission was denied in your browser."
+          : "Could not access microphone/camera. Check if another app is using them."
+      );
       finishCall();
     }
   };

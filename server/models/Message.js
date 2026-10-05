@@ -8,9 +8,10 @@ const messageSchema = new mongoose.Schema({
    text: {type: String, },
    image: {type: String, },
    audio: {type: String, },
+   video: {type: String, },
    seen: {type: Boolean, default: false},
    status: {type: String, enum: ["sent", "delivered", "read"], default: "sent"},
-   messageType: {type: String, enum: ["text", "image", "call", "audio"], default: "text"},
+   messageType: {type: String, enum: ["text", "image", "call", "audio", "video"], default: "text"},
    callDetails: {
       duration: {type: Number, default: 0},
       status: {type: String, enum: ["answered", "missed", "rejected", "declined"], default: "missed"},

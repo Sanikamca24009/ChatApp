@@ -15,7 +15,9 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => {
     let ext = path.extname(file.originalname).toLowerCase();
     if (!ext) {
-      if (file.mimetype.startsWith("audio/") || file.mimetype.includes("webm")) {
+      if (file.mimetype.startsWith("video/")) {
+        ext = file.mimetype.includes("mp4") ? ".mp4" : ".webm";
+      } else if (file.mimetype.startsWith("audio/")) {
         ext = file.mimetype.includes("ogg") ? ".ogg" : file.mimetype.includes("mp4") ? ".mp4" : ".webm";
       } else if (file.mimetype.startsWith("image/")) {
         ext = ".jpg";
@@ -32,21 +34,23 @@ const fileFilter = (req, file, cb) => {
   if (
     file.mimetype.startsWith("image/") ||
     file.mimetype.startsWith("audio/") ||
+    file.mimetype.startsWith("video/") ||
     file.mimetype.includes("webm") ||
     file.mimetype.includes("ogg") ||
     file.mimetype.includes("wav") ||
     file.mimetype.includes("mp3") ||
-    file.mimetype.includes("mp4")
+    file.mimetype.includes("mp4") ||
+    file.mimetype.includes("quicktime")
   ) {
     cb(null, true);
   } else {
-    cb(new Error("Only image and audio files are allowed"), false);
+    cb(new Error("Only image, audio and video files are allowed"), false);
   }
 };
 
 export const upload = multer({
   storage,
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB for HD video & audio
   fileFilter,
 });
 

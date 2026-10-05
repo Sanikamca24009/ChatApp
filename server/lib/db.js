@@ -1,9 +1,12 @@
+import dns from "node:dns";
 import mongoose from "mongoose";
+
+dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
 // Cache connection for serverless (Vercel reuses warm function instances)
 export const connectDB = async () => {
   if (mongoose.connection.readyState >= 1) return; // Reuse existing connection
-  
+
   const rawUri = process.env.MONGODB_URI || "";
   const uri = rawUri.trim().replace(/^["']|["']$/g, ""); // Strip any surrounding quotes
 

@@ -82,13 +82,13 @@ const Sidebar = () => {
   };
 
   return (
-    <div className="flex flex-col h-full w-full p-4 sm:p-5 text-white bg-[#8185B2]/5 overflow-hidden select-none">
+    <div className="flex flex-col h-full w-full px-3.5 sm:px-4 py-4 text-white bg-[#8185B2]/5 overflow-hidden select-none">
       {/* Header */}
       <div className="flex-shrink-0 pb-3">
-        <div className="flex justify-between items-center gap-2">
-          <img src={assets.logo} alt="QuickChat" className="max-w-24 sm:max-w-32 h-auto flex-shrink-0" />
+        <div className="flex justify-between items-center gap-1.5 sm:gap-2">
+          <img src={assets.logo} alt="QuickChat" className="w-24 sm:w-28 h-auto flex-shrink-0" />
           
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+          <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
             {/* New Group Button */}
             <button
               onClick={() => setIsGroupModalOpen(true)}
@@ -99,7 +99,7 @@ const Sidebar = () => {
               <svg className="w-4 h-4 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
               </svg>
-              <span className="hidden sm:inline font-medium">New Group</span>
+              <span className="inline font-medium">New Group</span>
             </button>
 
             {/* Logged-in User (Avatar / Letter & Name) */}
@@ -121,16 +121,16 @@ const Sidebar = () => {
                     {authUser.fullName ? authUser.fullName.trim().charAt(0).toUpperCase() : "U"}
                   </div>
                 )}
-                <span className="text-xs font-medium text-gray-200 group-hover:text-white truncate max-w-[65px] sm:max-w-[95px]">
+                <span className="text-xs font-medium text-gray-200 group-hover:text-white truncate max-w-[80px] sm:max-w-[110px]">
                   {authUser.fullName || "User"}
                 </span>
               </button>
             )}
 
-            <div className="relative" ref={menuRef}>
+            <div className="relative flex-shrink-0" ref={menuRef}>
               <button
                 onClick={() => setMenuOpen((prev) => !prev)}
-                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer text-gray-300 hover:text-white"
+                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer text-gray-300 hover:text-white flex items-center justify-center"
                 aria-label="Options menu"
               >
                 <img src={assets.menu_icon} alt="menu" className="w-4 h-4 object-contain" />
@@ -256,11 +256,6 @@ const Sidebar = () => {
                       <p className="font-semibold text-sm truncate text-white">
                         {item.fullName}
                       </p>
-                      {item.isGroup && (
-                        <span className="text-[10px] text-violet-300 bg-violet-500/20 px-1.5 py-0.2 rounded font-medium border border-violet-500/30 flex-shrink-0">
-                          Group
-                        </span>
-                      )}
                     </div>
                     {item.lastMessage?.createdAt && (
                       <span className="text-[11px] text-gray-400 font-medium whitespace-nowrap flex-shrink-0 ml-1.5">
@@ -287,15 +282,13 @@ const Sidebar = () => {
                             ? "🚫 This message was deleted"
                             : item.lastMessage.messageType === "audio" || item.lastMessage.audio
                             ? "🎤 Voice message"
+                            : item.lastMessage.messageType === "video" || item.lastMessage.video
+                            ? "🎥 Video"
                             : item.lastMessage.image
                             ? "📷 Photo"
                             : `${item.isGroup && item.lastMessage.senderId?.fullName ? `${item.lastMessage.senderId.fullName}: ` : ""}${item.lastMessage.text}`}
                         </span>
-                      ) : item.isGroup ? (
-                        <span className="text-gray-400">
-                          {item.members?.length ? `${item.members.length} members` : "Group"}
-                        </span>
-                      ) : isUserOnline ? (
+                      ) : item.isGroup ? null : isUserOnline ? (
                         <span className="text-green-400 font-medium">Online</span>
                       ) : (
                         <span className="text-gray-400">

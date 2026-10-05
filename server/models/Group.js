@@ -14,6 +14,12 @@ const groupSchema = new mongoose.Schema(
         required: true,
       },
     ],
+    pastMembers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
     admin: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

@@ -1,4 +1,5 @@
 import Group from "../models/Group.js";
+import User from "../models/User.js";
 import Message from "../models/Message.js";
 import cloudinary from "../lib/cloudinary.js";
 import { io, userSocketMap } from "../server.js";
@@ -67,12 +68,24 @@ export const createGroup = async (req, res) => {
   }
 };
 
-// Get all groups the logged-in user belongs to
+// Get all groups the logged-in user belongs to (or was previously in)
 export const getGroups = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    const groups = await Group.find({ members: userId })
+    // Find group IDs where user has previously sent messages
+    const userMessageGroupIds = await Message.distinct("groupId", {
+      senderId: userId,
+      groupId: { $ne: null },
+    });
+
+    const groups = await Group.find({
+      $or: [
+        { members: userId },
+        { pastMembers: userId },
+        { _id: { $in: userMessageGroupIds } },
+      ],
+    })
       .populate("members", "fullName profilePic email")
       .populate("admin", "fullName profilePic")
       .sort({ updatedAt: -1 });
@@ -86,13 +99,19 @@ export const getGroups = async (req, res) => {
           .sort({ createdAt: -1 })
           .populate("senderId", "fullName");
 
+        const isMember = group.members.some(
+          (m) => String(m._id || m) === String(userId)
+        );
+
         const groupObj = group.toObject();
         groupObj.isGroup = true;
+        groupObj.isRemoved = !isMember;
         groupObj.lastMessage = lastMsg
           ? {
               text: lastMsg.text,
               image: lastMsg.image,
               audio: lastMsg.audio,
+              video: lastMsg.video,
               messageType: lastMsg.messageType,
               isDeleted: lastMsg.isDeleted,
               senderId: lastMsg.senderId,
@@ -116,7 +135,7 @@ export const getGroups = async (req, res) => {
   }
 };
 
-// Get messages for a specific group
+// Get messages for a specific group (accessible to active members and past members)
 export const getGroupMessages = async (req, res) => {
   try {
     const { id: groupId } = req.params;
@@ -128,7 +147,11 @@ export const getGroupMessages = async (req, res) => {
     }
 
     const isMember = group.members.some((m) => m.toString() === userId.toString());
-    if (!isMember) {
+    const isPastMember =
+      (group.pastMembers || []).some((m) => m.toString() === userId.toString()) ||
+      (await Message.exists({ groupId, senderId: userId }));
+
+    if (!isMember && !isPastMember) {
       return res.status(403).json({ success: false, message: "You are not a member of this group" });
     }
 
@@ -163,16 +186,23 @@ export const sendGroupMessage = async (req, res) => {
 
     const uploadedFile = req.file || (req.files && req.files[0]);
     let fileUrl = "";
+    let isVideo = false;
     let isAudio = false;
 
     // Handle file upload via Multer
     if (uploadedFile) {
-      isAudio = Boolean(
+      isVideo = Boolean(
+        uploadedFile.mimetype?.startsWith("video/") ||
+        uploadedFile.fieldname === "video" ||
+        req.body.messageType === "video"
+      );
+
+      isAudio = !isVideo && Boolean(
         uploadedFile.mimetype?.startsWith("audio/") ||
-        uploadedFile.mimetype?.includes("webm") ||
         uploadedFile.mimetype?.includes("ogg") ||
         uploadedFile.fieldname === "audio" ||
-        req.body.messageType === "audio"
+        req.body.messageType === "audio" ||
+        (!uploadedFile.mimetype?.startsWith("image/") && uploadedFile.mimetype?.includes("webm") && req.body.messageType !== "video")
       );
 
       const hasCloudinary = Boolean(
@@ -184,8 +214,8 @@ export const sendGroupMessage = async (req, res) => {
       if (hasCloudinary) {
         try {
           const uploadOptions = {
-            folder: isAudio ? "chat-audio" : "chat-messages",
-            resource_type: "auto",
+            folder: isVideo ? "chat-videos" : isAudio ? "chat-audio" : "chat-messages",
+            resource_type: isVideo ? "video" : isAudio ? "auto" : "auto",
           };
           const uploadResponse = await cloudinary.uploader.upload(uploadedFile.path, uploadOptions);
           fileUrl = uploadResponse.secure_url;
@@ -196,6 +226,9 @@ export const sendGroupMessage = async (req, res) => {
       } else {
         fileUrl = `${req.protocol}://${req.get("host")}/uploads/${uploadedFile.filename}`;
       }
+    } else if (req.body.video) {
+      fileUrl = req.body.video;
+      isVideo = true;
     } else if (req.body.image) {
       // Base64 upload fallback
       try {
@@ -209,14 +242,15 @@ export const sendGroupMessage = async (req, res) => {
       isAudio = true;
     }
 
-    const messageType = isAudio ? "audio" : fileUrl ? "image" : "text";
+    const messageType = isVideo ? "video" : isAudio ? "audio" : fileUrl ? "image" : "text";
 
     const newMessage = await Message.create({
       senderId,
       groupId,
       text: text || "",
-      image: isAudio ? "" : (fileUrl || ""),
+      image: (!isAudio && !isVideo) ? (fileUrl || "") : "",
       audio: isAudio ? (fileUrl || "") : "",
+      video: isVideo ? (fileUrl || "") : "",
       messageType,
       status: "delivered",
     });
@@ -263,7 +297,13 @@ export const exitGroup = async (req, res) => {
       return res.status(403).json({ success: false, message: "You are not a member of this group" });
     }
 
-    // Remove user from group members
+    // Add user to pastMembers so past chat remains viewable as read-only
+    if (!group.pastMembers) group.pastMembers = [];
+    if (!group.pastMembers.some((m) => m.toString() === userId.toString())) {
+      group.pastMembers.push(userId);
+    }
+
+    // Remove user from active group members
     group.members = group.members.filter((m) => m.toString() !== userId.toString());
 
     // If no members remain, delete group
@@ -299,7 +339,7 @@ export const exitGroup = async (req, res) => {
     groupObj.lastMessage = systemNotice;
     groupObj.lastMessageTime = new Date(systemNotice.createdAt).getTime();
 
-    // Notify remaining group members
+    // Notify remaining active group members
     group.members.forEach((memberId) => {
       const sId = userSocketMap[memberId.toString()];
       if (sId) {
@@ -309,11 +349,34 @@ export const exitGroup = async (req, res) => {
           userName: req.user.fullName,
           group: groupObj,
         });
+        io.to(sId).emit("groupUpdated", groupObj);
         io.to(sId).emit("newMessage", systemNotice);
       }
     });
 
-    res.json({ success: true, message: "Left group successfully", group: groupObj });
+    // Notify the exiting user with isRemoved: true so group stays in their sidebar as read-only
+    const groupObjForExitedUser = { ...groupObj, isRemoved: true };
+    const exitingSocketId = userSocketMap[userId.toString()];
+    if (exitingSocketId) {
+      io.to(exitingSocketId).emit("groupMemberLeft", {
+        groupId,
+        userId: userId.toString(),
+        userName: req.user.fullName,
+        group: groupObjForExitedUser,
+      });
+      io.to(exitingSocketId).emit("groupUpdated", groupObjForExitedUser);
+      io.to(exitingSocketId).emit("newMessage", systemNotice);
+    }
+    io.to(userId.toString()).emit("groupMemberLeft", {
+      groupId,
+      userId: userId.toString(),
+      userName: req.user.fullName,
+      group: groupObjForExitedUser,
+    });
+    io.to(userId.toString()).emit("groupUpdated", groupObjForExitedUser);
+    io.to(userId.toString()).emit("newMessage", systemNotice);
+
+    res.json({ success: true, message: "Left group successfully", group: groupObjForExitedUser });
   } catch (error) {
     console.error("Error in exitGroup:", error.message);
     res.status(500).json({ success: false, message: error.message });
@@ -359,6 +422,13 @@ export const addMembers = async (req, res) => {
       return res.status(400).json({ success: false, message: "Selected users are already members of this group" });
     }
 
+    // Remove from pastMembers if re-added
+    if (group.pastMembers) {
+      group.pastMembers = group.pastMembers.filter(
+        (m) => !newMemberIds.some((newId) => newId.toString() === m.toString())
+      );
+    }
+
     newMemberIds.forEach((mId) => group.members.push(mId));
     await group.save();
 
@@ -379,6 +449,7 @@ export const addMembers = async (req, res) => {
 
     const groupObj = populatedGroup.toObject();
     groupObj.isGroup = true;
+    groupObj.isRemoved = false;
     groupObj.lastMessage = systemNotice;
     groupObj.lastMessageTime = new Date(systemNotice.createdAt).getTime();
 
@@ -432,6 +503,13 @@ export const removeMember = async (req, res) => {
     const removedUser = await User.findById(memberId).select("fullName");
     const removedUserName = removedUser?.fullName || "A member";
 
+    // Add to pastMembers so the removed user still has read-only access to their past chat
+    if (!group.pastMembers) group.pastMembers = [];
+    if (!group.pastMembers.some((m) => m.toString() === memberId.toString())) {
+      group.pastMembers.push(memberId);
+    }
+
+    // Remove from active group members
     group.members = group.members.filter((m) => m.toString() !== memberId.toString());
 
     if (group.members.length === 0) {
@@ -462,22 +540,30 @@ export const removeMember = async (req, res) => {
     groupObj.lastMessage = systemNotice;
     groupObj.lastMessageTime = new Date(systemNotice.createdAt).getTime();
 
+    // Group object for the removed user has isRemoved: true
+    const groupObjForRemoved = { ...groupObj, isRemoved: true };
+
     const removedSocketId = userSocketMap[memberId.toString()];
     if (removedSocketId) {
       io.to(removedSocketId).emit("groupMemberLeft", {
         groupId,
         userId: memberId.toString(),
         userName: removedUserName,
-        group: null,
+        group: groupObjForRemoved,
       });
+      io.to(removedSocketId).emit("groupUpdated", groupObjForRemoved);
+      io.to(removedSocketId).emit("newMessage", systemNotice);
     }
     io.to(memberId.toString()).emit("groupMemberLeft", {
       groupId,
       userId: memberId.toString(),
       userName: removedUserName,
-      group: null,
+      group: groupObjForRemoved,
     });
+    io.to(memberId.toString()).emit("groupUpdated", groupObjForRemoved);
+    io.to(memberId.toString()).emit("newMessage", systemNotice);
 
+    // Notify remaining active members
     group.members.forEach((mId) => {
       const mIdStr = mId.toString();
       const sId = userSocketMap[mIdStr];

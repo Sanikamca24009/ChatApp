@@ -6,6 +6,7 @@ import { AuthContext } from "../../context/AuthContext";
 import { CallContext } from "../../context/CallContext";
 import toast from "react-hot-toast";
 import AudioMessagePlayer from "./AudioMessagePlayer";
+import CameraModal from "./CameraModal";
 
 const COMMON_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
@@ -73,6 +74,15 @@ const ChatContainer = () => {
     return names.join(", ");
   }, [selectedUser, authUser]);
 
+  const isCurrentUserMember = useMemo(() => {
+    if (!selectedUser?.isGroup) return true;
+    if (selectedUser.isRemoved) return false;
+    if (!Array.isArray(selectedUser.members)) return true;
+    return selectedUser.members.some(
+      (m) => String(m._id || m) === String(authUser?._id)
+    );
+  }, [selectedUser, authUser]);
+
   const scrollEnd = useRef(null);
   const messagesContainerRef = useRef(null);
   const isInitialLoadRef = useRef(true);
@@ -107,6 +117,7 @@ const ChatContainer = () => {
   const [input, setInput] = useState("");
   const [modalImage, setModalImage] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [contextMenu, setContextMenu] = useState(null); // { message, x, y }
   const [editingMessageId, setEditingMessageId] = useState(null);
@@ -536,6 +547,33 @@ const ChatContainer = () => {
     e.target.value = "";
   };
 
+  const handleSendCameraMedia = async ({ file, text, type }) => {
+    const isVideo = type === "video";
+    const formData = new FormData();
+    if (isVideo) {
+      formData.append("video", file);
+      formData.append("messageType", "video");
+    } else {
+      formData.append("image", file);
+      formData.append("messageType", "image");
+    }
+    if (text) {
+      formData.append("text", text);
+    }
+
+    const loadingToast = toast.loading(isVideo ? "Sending HD video..." : "Sending HD photo...");
+    try {
+      await sendMessage(formData);
+      toast.dismiss(loadingToast);
+      toast.success(isVideo ? "HD video sent!" : "HD photo sent!");
+      scrollToBottom("smooth");
+    } catch (err) {
+      toast.dismiss(loadingToast);
+      toast.error("Failed to send media: " + (err.message || "Unknown error"));
+      throw err;
+    }
+  };
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === "Escape") setModalImage(null);
@@ -767,9 +805,15 @@ const ChatContainer = () => {
                 </span>
               </div>
               {selectedUser.isGroup ? (
-                <span className="text-xs text-gray-400 truncate" title={groupMembersText}>
-                  {groupMembersText}
-                </span>
+                !isCurrentUserMember ? (
+                  <span className="text-xs text-rose-400 font-medium truncate">
+                    You are no longer a member of this group
+                  </span>
+                ) : (
+                  <span className="text-xs text-gray-400 truncate" title={groupMembersText}>
+                    {groupMembersText}
+                  </span>
+                )
               ) : typingUser ? (
                 <span className="text-xs text-violet-400 italic font-medium animate-pulse">
                   typing...
@@ -786,57 +830,61 @@ const ChatContainer = () => {
         </div>
 
         <div className="flex items-center gap-1 flex-shrink-0">
-          {/* VOICE CALL BUTTON */}
-          <button
-            type="button"
-            onClick={() =>
-              selectedUser?.isGroup
-                ? startGroupCall(selectedUser, "voice")
-                : startCall(selectedUser, "voice")
-            }
-            className="p-2 rounded-full text-green-400 hover:text-green-300 hover:bg-green-500/15 transition-all cursor-pointer"
-            title={
-              selectedUser?.isGroup
-                ? `Group voice call in ${selectedUser.name || "group"}`
-                : `Voice call ${selectedUser.fullName || selectedUser.name || "contact"}${!isOnline ? " (Offline)" : ""}`
-            }
-            aria-label="Start voice call"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a11.042 11.042 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-              />
-            </svg>
-          </button>
+          {/* VOICE CALL BUTTON (Active members only) */}
+          {isCurrentUserMember && (
+            <button
+              type="button"
+              onClick={() =>
+                selectedUser?.isGroup
+                  ? startGroupCall(selectedUser, "voice")
+                  : startCall(selectedUser, "voice")
+              }
+              className="p-2 rounded-full text-green-400 hover:text-green-300 hover:bg-green-500/15 transition-all cursor-pointer"
+              title={
+                selectedUser?.isGroup
+                  ? `Group voice call in ${selectedUser.name || "group"}`
+                  : `Voice call ${selectedUser.fullName || selectedUser.name || "contact"}${!isOnline ? " (Offline)" : ""}`
+              }
+              aria-label="Start voice call"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a11.042 11.042 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                />
+              </svg>
+            </button>
+          )}
 
-          {/* VIDEO CALL BUTTON */}
-          <button
-            type="button"
-            onClick={() =>
-              selectedUser?.isGroup
-                ? startGroupCall(selectedUser, "video")
-                : startCall(selectedUser, "video")
-            }
-            className="p-2 rounded-full text-violet-400 hover:text-violet-300 hover:bg-violet-500/15 transition-all cursor-pointer"
-            title={
-              selectedUser?.isGroup
-                ? `Group video call in ${selectedUser.name || "group"}`
-                : `Video call ${selectedUser.fullName || selectedUser.name || "contact"}${!isOnline ? " (Offline)" : ""}`
-            }
-            aria-label="Start video call"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-              />
-            </svg>
-          </button>
+          {/* VIDEO CALL BUTTON (Active members only) */}
+          {isCurrentUserMember && (
+            <button
+              type="button"
+              onClick={() =>
+                selectedUser?.isGroup
+                  ? startGroupCall(selectedUser, "video")
+                  : startCall(selectedUser, "video")
+              }
+              className="p-2 rounded-full text-violet-400 hover:text-violet-300 hover:bg-violet-500/15 transition-all cursor-pointer"
+              title={
+                selectedUser?.isGroup
+                  ? `Group video call in ${selectedUser.name || "group"}`
+                  : `Video call ${selectedUser.fullName || selectedUser.name || "contact"}${!isOnline ? " (Offline)" : ""}`
+              }
+              aria-label="Start video call"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+                />
+              </svg>
+            </button>
+          )}
 
           {/* SEARCH TOGGLE BUTTON */}
           <button
@@ -1243,8 +1291,20 @@ const ChatContainer = () => {
                           </div>
                         </div>
                       )}
+                      {(msg.messageType === "video" || msg.video) && (
+                        <div className="relative group mt-0.5 mb-1.5 overflow-hidden rounded-xl border border-white/10 bg-black/40 shadow-md">
+                          <video
+                            src={msg.video}
+                            controls
+                            playsInline
+                            preload="metadata"
+                            onLoadedMetadata={handleImageLoad}
+                            className="max-h-80 w-auto max-w-full rounded-xl object-contain bg-black"
+                          />
+                        </div>
+                      )}
                       {msg.text && (
-                        <p className={msg.image ? "mt-1 break-words leading-relaxed" : "break-words leading-relaxed"}>
+                        <p className={msg.image || msg.video ? "mt-1 break-words leading-relaxed" : "break-words leading-relaxed"}>
                           {isSearchOpen && searchQuery.trim()
                             ? renderHighlightedText(msg.text, searchQuery, isCurrentMatch)
                             : msg.text}
@@ -1370,159 +1430,189 @@ const ChatContainer = () => {
       </div>
 
       {/* INPUT */}
-      <form
-        onSubmit={handleSendMessage}
-        className="sticky bottom-0 z-10 flex flex-col p-2.5 sm:p-3 bg-[#161622]/95 backdrop-blur-md border-t border-white/10"
-      >
-        {/* PREVIEW CONTAINER WHEN IMAGE IS SELECTED */}
-        {selectedImage && (
-          <div className="relative mb-2.5 self-start inline-flex items-center">
-            <div className="relative rounded-xl overflow-hidden border-2 border-violet-500/60 shadow-xl bg-[#282142] group">
-              <img
-                src={selectedImage.previewUrl}
-                alt="Selected preview"
-                className="h-20 sm:h-24 w-auto max-w-[200px] object-cover rounded-lg"
-              />
-              <button
-                type="button"
-                onClick={handleRemoveSelectedImage}
-                className="absolute top-1 right-1 bg-black/70 hover:bg-red-500 text-white p-1 rounded-full transition-colors cursor-pointer shadow-md"
-                title="Remove image"
-                aria-label="Remove image"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <span className="text-xs text-violet-300 ml-2.5 font-medium select-none">
-              Image selected. Click Send to send.
-            </span>
-          </div>
-        )}
-
-        {isRecording ? (
-          <div className="flex items-center gap-2 bg-[#282142] border border-red-500/40 rounded-full px-3 sm:px-4 py-2 animate-in fade-in zoom-in-95 duration-150">
-            {/* Pulsing red record indicator & timer */}
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="relative flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
-              </span>
-              <span className="text-xs sm:text-sm font-mono font-medium text-red-200">
-                {formatTimer(recordingDuration)}
-              </span>
-            </div>
-
-            {/* Live animated wave bars */}
-            <div className="flex-1 flex items-center justify-center gap-1 sm:gap-1.5 h-6 px-2 overflow-hidden">
-              {liveWaveBars.map((height, i) => (
-                <div
-                  key={i}
-                  style={{ height: `${height}%` }}
-                  className="w-1 sm:w-1.5 bg-gradient-to-t from-red-500 to-violet-400 rounded-full transition-all duration-75"
+      {!isCurrentUserMember ? (
+        <div className="sticky bottom-0 z-10 p-3.5 sm:p-4 bg-[#161622]/95 backdrop-blur-md border-t border-white/10 flex items-center justify-center text-center">
+          <p className="text-xs sm:text-sm text-gray-400 font-medium flex items-center justify-center gap-2">
+            <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            You can't send messages to this group because you're no longer a member.
+          </p>
+        </div>
+      ) : (
+        <form
+          onSubmit={handleSendMessage}
+          className="sticky bottom-0 z-10 flex flex-col p-2.5 sm:p-3 bg-[#161622]/95 backdrop-blur-md border-t border-white/10"
+        >
+          {/* PREVIEW CONTAINER WHEN IMAGE IS SELECTED */}
+          {selectedImage && (
+            <div className="relative mb-2.5 self-start inline-flex items-center">
+              <div className="relative rounded-xl overflow-hidden border-2 border-violet-500/60 shadow-xl bg-[#282142] group">
+                <img
+                  src={selectedImage.previewUrl}
+                  alt="Selected preview"
+                  className="h-20 sm:h-24 w-auto max-w-[200px] object-cover rounded-lg"
                 />
-              ))}
+                <button
+                  type="button"
+                  onClick={handleRemoveSelectedImage}
+                  className="absolute top-1 right-1 bg-black/70 hover:bg-red-500 text-white p-1 rounded-full transition-colors cursor-pointer shadow-md"
+                  title="Remove image"
+                  aria-label="Remove image"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <span className="text-xs text-violet-300 ml-2.5 font-medium select-none">
+                Image selected. Click Send to send.
+              </span>
             </div>
+          )}
 
-            {/* Action buttons: Cancel (Trash) & Send */}
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <button
-                type="button"
-                onClick={cancelRecording}
-                className="p-2 text-gray-400 hover:text-red-400 hover:bg-white/10 rounded-full transition-colors cursor-pointer"
-                title="Cancel recording"
-                aria-label="Cancel recording"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
+          {isRecording ? (
+            <div className="flex items-center gap-2 bg-[#282142] border border-red-500/40 rounded-full px-3 sm:px-4 py-2 animate-in fade-in zoom-in-95 duration-150">
+              {/* Pulsing red record indicator & timer */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+                </span>
+                <span className="text-xs sm:text-sm font-mono font-medium text-red-200">
+                  {formatTimer(recordingDuration)}
+                </span>
+              </div>
+
+              {/* Live animated wave bars */}
+              <div className="flex-1 flex items-center justify-center gap-1 sm:gap-1.5 h-6 px-2 overflow-hidden">
+                {liveWaveBars.map((height, i) => (
+                  <div
+                    key={i}
+                    style={{ height: `${height}%` }}
+                    className="w-1 sm:w-1.5 bg-gradient-to-t from-red-500 to-violet-400 rounded-full transition-all duration-75"
+                  />
+                ))}
+              </div>
+
+              {/* Action buttons: Cancel (Trash) & Send */}
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={cancelRecording}
+                  className="p-2 text-gray-400 hover:text-red-400 hover:bg-white/10 rounded-full transition-colors cursor-pointer"
+                  title="Cancel recording"
+                  aria-label="Cancel recording"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={stopAndSendRecording}
+                  disabled={isSendingAudio}
+                  className="p-2 bg-violet-600 hover:bg-violet-500 text-white rounded-full shadow-md shadow-violet-600/30 transition-all cursor-pointer hover:scale-105 active:scale-95 disabled:opacity-50"
+                  title="Send voice message"
+                  aria-label="Send voice message"
+                >
+                  {isSendingAudio ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <div className="flex-1 flex items-center gap-2 bg-[#282142]/70 border border-white/10 focus-within:border-violet-500/60 rounded-full px-4 py-2 transition-all">
+                <input
+                  value={input}
+                  onChange={handleInputChange}
+                  placeholder={selectedImage ? "Add a caption (optional)..." : "Type a message..."}
+                  className="flex-1 bg-transparent text-white outline-none text-sm placeholder-gray-400 min-w-0"
+                />
+                
+                <input
+                  type="file"
+                  id="image"
+                  ref={fileInputRef}
+                  hidden
+                  accept="image/*"
+                  onChange={handleImageSelect}
+                />
+                <label
+                  htmlFor="image"
+                  className="cursor-pointer flex-shrink-0 text-gray-400 hover:text-violet-400 transition-colors p-1"
+                  title="Attach image"
+                >
+                  <img
+                    src={assets.gallery_icon}
+                    className={`w-5 h-5 transition-all ${
+                      selectedImage ? "opacity-100 filter drop-shadow-[0_0_6px_rgba(139,92,246,0.8)]" : "opacity-70 hover:opacity-100"
+                    }`}
+                    alt="Upload"
+                  />
+                </label>
+
+                {/* Camera icon button to take HD Photo or Video */}
+                <button
+                  type="button"
+                  onClick={() => setIsCameraOpen(true)}
+                  className="text-gray-400 hover:text-violet-400 transition-colors p-1 cursor-pointer flex-shrink-0"
+                  title="Open Camera (HD Photo / Video)"
+                  aria-label="Open Camera"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+                    />
+                    <circle cx="12" cy="13" r="3" strokeWidth="2" />
+                  </svg>
+                </button>
+
+                {/* Microphone icon button next to gallery icon */}
+                <button
+                  type="button"
+                  onMouseDown={handleMicMouseDown}
+                  onTouchStart={handleMicMouseDown}
+                  className="text-gray-400 hover:text-violet-400 transition-colors p-1 cursor-pointer flex-shrink-0"
+                  title="Click to record or hold to talk"
+                  aria-label="Record voice message"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  </svg>
+                </button>
+              </div>
 
               <button
-                type="button"
-                onClick={stopAndSendRecording}
-                disabled={isSendingAudio}
-                className="p-2 bg-violet-600 hover:bg-violet-500 text-white rounded-full shadow-md shadow-violet-600/30 transition-all cursor-pointer hover:scale-105 active:scale-95 disabled:opacity-50"
-                title="Send voice message"
-                aria-label="Send voice message"
+                type="submit"
+                disabled={(!input.trim() && !selectedImage) || uploadingImage}
+                className={`p-2.5 rounded-full flex items-center justify-center transition-all cursor-pointer flex-shrink-0 ${
+                  (input.trim() || selectedImage) && !uploadingImage
+                    ? "bg-violet-600 hover:bg-violet-500 text-white shadow-md shadow-violet-600/30 scale-100"
+                    : "opacity-40 cursor-not-allowed text-gray-400"
+                }`}
+                aria-label="Send message"
               >
-                {isSendingAudio ? (
+                {uploadingImage ? (
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 ) : (
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                  </svg>
+                  <img src={assets.send_button} className="w-5 h-5" alt="Send" />
                 )}
               </button>
             </div>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <div className="flex-1 flex items-center gap-2 bg-[#282142]/70 border border-white/10 focus-within:border-violet-500/60 rounded-full px-4 py-2 transition-all">
-              <input
-                value={input}
-                onChange={handleInputChange}
-                placeholder={selectedImage ? "Add a caption (optional)..." : "Type a message..."}
-                className="flex-1 bg-transparent text-white outline-none text-sm placeholder-gray-400 min-w-0"
-              />
-              
-              <input
-                type="file"
-                id="image"
-                ref={fileInputRef}
-                hidden
-                accept="image/*"
-                onChange={handleImageSelect}
-              />
-              <label
-                htmlFor="image"
-                className="cursor-pointer flex-shrink-0 text-gray-400 hover:text-violet-400 transition-colors p-1"
-                title="Attach image"
-              >
-                <img
-                  src={assets.gallery_icon}
-                  className={`w-5 h-5 transition-all ${
-                    selectedImage ? "opacity-100 filter drop-shadow-[0_0_6px_rgba(139,92,246,0.8)]" : "opacity-70 hover:opacity-100"
-                  }`}
-                  alt="Upload"
-                />
-              </label>
-
-              {/* Microphone icon button next to gallery icon */}
-              <button
-                type="button"
-                onMouseDown={handleMicMouseDown}
-                onTouchStart={handleMicMouseDown}
-                className="text-gray-400 hover:text-violet-400 transition-colors p-1 cursor-pointer flex-shrink-0"
-                title="Click to record or hold to talk"
-                aria-label="Record voice message"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                </svg>
-              </button>
-            </div>
-
-            <button
-              type="submit"
-              disabled={(!input.trim() && !selectedImage) || uploadingImage}
-              className={`p-2.5 rounded-full flex items-center justify-center transition-all cursor-pointer flex-shrink-0 ${
-                (input.trim() || selectedImage) && !uploadingImage
-                  ? "bg-violet-600 hover:bg-violet-500 text-white shadow-md shadow-violet-600/30 scale-100"
-                  : "opacity-40 cursor-not-allowed text-gray-400"
-              }`}
-              aria-label="Send message"
-            >
-              {uploadingImage ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <img src={assets.send_button} className="w-5 h-5" alt="Send" />
-              )}
-            </button>
-          </div>
-        )}
-      </form>
+          )}
+        </form>
+      )}
 
       {/* FULL-SCREEN IMAGE MODAL */}
       {modalImage && (
@@ -1586,7 +1676,7 @@ const ChatContainer = () => {
           )}
 
           {/* EDIT OPTION (Only for sender's own text messages within 15 mins) */}
-          {contextMenu.isMe && contextMenu.message.text && !contextMenu.message.audio && contextMenu.message.messageType !== "audio" && !contextMenu.message.isDeleted && !contextMenu.isExpired && (
+          {contextMenu.isMe && contextMenu.message.text && !contextMenu.message.audio && contextMenu.message.messageType !== "audio" && !contextMenu.message.video && contextMenu.message.messageType !== "video" && !contextMenu.message.image && !contextMenu.message.isDeleted && !contextMenu.isExpired && (
             <>
               <button
                 onClick={() => {
@@ -1658,6 +1748,12 @@ const ChatContainer = () => {
         </div>
       )}
 
+      {/* HD CAMERA MODAL FOR PHOTO & VIDEO */}
+      <CameraModal
+        isOpen={isCameraOpen}
+        onClose={() => setIsCameraOpen(false)}
+        onSend={handleSendCameraMedia}
+      />
 
     </div>
   );

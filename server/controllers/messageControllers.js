@@ -39,6 +39,7 @@ export const getUsersForSidebar = async (req, res) => {
                     text: lastMsg.text,
                     image: lastMsg.image,
                     audio: lastMsg.audio,
+                    video: lastMsg.video,
                     messageType: lastMsg.messageType,
                     isDeleted: lastMsg.isDeleted,
                     senderId: lastMsg.senderId,
@@ -119,16 +120,23 @@ export const sendMessage = async (req, res)=>{
 
         const uploadedFile = req.file || (req.files && req.files[0]);
         let fileUrl = "";
+        let isVideo = false;
         let isAudio = false;
 
         // 1. If file uploaded via Multer
         if (uploadedFile) {
-            isAudio = Boolean(
+            isVideo = Boolean(
+                uploadedFile.mimetype?.startsWith("video/") ||
+                uploadedFile.fieldname === "video" ||
+                req.body.messageType === "video"
+            );
+
+            isAudio = !isVideo && Boolean(
                 uploadedFile.mimetype?.startsWith("audio/") ||
-                uploadedFile.mimetype?.includes("webm") ||
                 uploadedFile.mimetype?.includes("ogg") ||
                 uploadedFile.fieldname === "audio" ||
-                req.body.messageType === "audio"
+                req.body.messageType === "audio" ||
+                (!uploadedFile.mimetype?.startsWith("image/") && uploadedFile.mimetype?.includes("webm") && req.body.messageType !== "video")
             );
 
             const hasCloudinary = Boolean(
@@ -140,8 +148,8 @@ export const sendMessage = async (req, res)=>{
             if (hasCloudinary) {
                 try {
                     const uploadOptions = {
-                        folder: isAudio ? "chat-audio" : "chat-messages",
-                        resource_type: "auto",
+                        folder: isVideo ? "chat-videos" : isAudio ? "chat-audio" : "chat-messages",
+                        resource_type: isVideo ? "video" : isAudio ? "auto" : "auto",
                     };
                     const uploadResponse = await cloudinary.uploader.upload(uploadedFile.path, uploadOptions);
                     fileUrl = uploadResponse.secure_url;
@@ -152,6 +160,9 @@ export const sendMessage = async (req, res)=>{
             } else {
                 fileUrl = `${req.protocol}://${req.get("host")}/uploads/${uploadedFile.filename}`;
             }
+        } else if (req.body.video) {
+            fileUrl = req.body.video;
+            isVideo = true;
         } else if (req.body.image) {
             // 2. Base64 fallback if sent in JSON body
             try {
@@ -168,14 +179,15 @@ export const sendMessage = async (req, res)=>{
         const receiverIdStr = receiverId.toString();
         const receiverSocketId = userSocketMap[receiverIdStr];
         const status = receiverSocketId ? "delivered" : "sent";
-        const messageType = isAudio ? "audio" : fileUrl ? "image" : "text";
+        const messageType = isVideo ? "video" : isAudio ? "audio" : fileUrl ? "image" : "text";
 
         const newMessage = await Message.create({
             senderId,
             receiverId,
             text: text || "",
-            image: isAudio ? "" : (fileUrl || ""),
+            image: (!isAudio && !isVideo) ? (fileUrl || "") : "",
             audio: isAudio ? (fileUrl || "") : "",
+            video: isVideo ? (fileUrl || "") : "",
             messageType,
             status
         });

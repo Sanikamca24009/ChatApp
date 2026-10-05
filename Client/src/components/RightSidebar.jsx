@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useState, useMemo } from "react";
 import assets from "../assets/assets";
 import { ChatContext } from "../../context/ChatContext";
 import { AuthContext } from "../../context/AuthContext";
@@ -59,6 +59,15 @@ const RightSidebar = ({ onClose }) => {
   const currentMemberIds = new Set(
     (selectedUser?.members || []).map((m) => String(m._id || m))
   );
+
+  const isCurrentUserMember = useMemo(() => {
+    if (!selectedUser?.isGroup) return true;
+    if (selectedUser.isRemoved) return false;
+    if (!Array.isArray(selectedUser.members)) return true;
+    return selectedUser.members.some(
+      (m) => String(m._id || m) === String(authUser?._id)
+    );
+  }, [selectedUser, authUser]);
   const availableUsersToAdd = (users || []).filter(
     (u) => !currentMemberIds.has(String(u._id))
   );
@@ -155,49 +164,51 @@ const RightSidebar = ({ onClose }) => {
           </div>
 
           {/* QUICK CALL ACTIONS FOR ALL USERS & GROUPS */}
-          <div className="mt-3.5 flex items-center justify-center gap-2.5 w-full max-w-[240px]">
-            <button
-              type="button"
-              onClick={() =>
-                selectedUser.isGroup
-                  ? startGroupCall(selectedUser, "voice")
-                  : startCall(selectedUser, "voice")
-              }
-              className="flex-1 py-2 px-3 rounded-xl bg-green-500/10 hover:bg-green-500/20 border border-green-500/25 text-green-400 hover:text-green-300 text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
-              title={selectedUser.isGroup ? "Group Voice Call" : "Voice Call"}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a11.042 11.042 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                />
-              </svg>
-              <span>Audio</span>
-            </button>
+          {isCurrentUserMember && (
+            <div className="mt-3.5 flex items-center justify-center gap-2.5 w-full max-w-[240px]">
+              <button
+                type="button"
+                onClick={() =>
+                  selectedUser.isGroup
+                    ? startGroupCall(selectedUser, "voice")
+                    : startCall(selectedUser, "voice")
+                }
+                className="flex-1 py-2 px-3 rounded-xl bg-green-500/10 hover:bg-green-500/20 border border-green-500/25 text-green-400 hover:text-green-300 text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+                title={selectedUser.isGroup ? "Group Voice Call" : "Voice Call"}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a11.042 11.042 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                  />
+                </svg>
+                <span>Audio</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() =>
-                selectedUser.isGroup
-                  ? startGroupCall(selectedUser, "video")
-                  : startCall(selectedUser, "video")
-              }
-              className="flex-1 py-2 px-3 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/25 text-violet-400 hover:text-violet-300 text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
-              title={selectedUser.isGroup ? "Group Video Call" : "Video Call"}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-                />
-              </svg>
-              <span>Video</span>
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() =>
+                  selectedUser.isGroup
+                    ? startGroupCall(selectedUser, "video")
+                    : startCall(selectedUser, "video")
+                }
+                className="flex-1 py-2 px-3 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/25 text-violet-400 hover:text-violet-300 text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+                title={selectedUser.isGroup ? "Group Video Call" : "Video Call"}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+                  />
+                </svg>
+                <span>Video</span>
+              </button>
+            </div>
+          )}
 
           {selectedUser.isGroup && (
             <div className="w-full mt-4 pt-3 border-t border-white/10 text-left">
@@ -205,8 +216,8 @@ const RightSidebar = ({ onClose }) => {
                 <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
                   Members ({selectedUser.members?.length || 0})
                 </p>
-                {/* Add Member button (Admin only) */}
-                {isGroupCreator && (
+                {/* Add Member button (Admin only, active member only) */}
+                {isGroupCreator && isCurrentUserMember && (
                   <button
                     type="button"
                     onClick={() => setShowAddMemberModal(true)}
@@ -326,15 +337,21 @@ const RightSidebar = ({ onClose }) => {
       {/* FOOTER ACTIONS */}
       <div className="p-4 border-t border-white/10 flex-shrink-0 flex flex-col gap-2">
         {selectedUser.isGroup && (
-          <button
-            onClick={() => setShowExitModal(true)}
-            className="w-full py-2.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 hover:text-red-300 text-sm font-semibold transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            Exit Group
-          </button>
+          isCurrentUserMember ? (
+            <button
+              onClick={() => setShowExitModal(true)}
+              className="w-full py-2.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 hover:text-red-300 text-sm font-semibold transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Exit Group
+            </button>
+          ) : (
+            <div className="w-full py-2 px-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-medium text-center">
+              You are no longer a member of this group
+            </div>
+          )
         )}
         <button
           onClick={logout}
